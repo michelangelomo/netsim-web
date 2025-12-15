@@ -12,6 +12,7 @@ export interface SVIInterface {
   vlanId: number;
   ipAddress?: string;
   subnetMask?: string;
+  macAddress: string; // Auto-generated MAC for the SVI
   isUp: boolean;
 }
 
@@ -192,8 +193,11 @@ export interface Packet {
 
   // Simulation state
   currentDeviceId: string; // Device currently holding the packet
+  sourceDeviceId?: string; // Original source device
   lastDeviceId?: string; // Previous device (for ingress port determination)
   targetDeviceId?: string; // Next device (if on link)
+  ingressInterface?: string; // Interface name where packet arrived
+  egressInterface?: string; // Interface name where packet will leave
   processingStage: 'at-device' | 'on-link' | 'arrived' | 'dropped' | 'buffered';
   waitingForArp?: string; // IP address we are waiting ARP for
   progress: number; // 0-100 for link traversal

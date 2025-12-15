@@ -1,0 +1,161 @@
+{
+    "name": "Simple Two PCs",
+    "description": "Two PCs connected directly via a switch. Basic ping test topology.",
+    "devices": [
+        {
+            "id": "pc-1",
+            "type": "pc",
+            "name": "PC1",
+            "hostname": "pc1",
+            "interfaces": [
+                {
+                    "id": "pc1-eth0",
+                    "name": "eth0",
+                    "macAddress": "00:11:22:33:44:01",
+                    "ipAddress": "192.168.1.10",
+                    "subnetMask": "255.255.255.0",
+                    "gateway": "192.168.1.1",
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "sw1-fa0"
+                }
+            ],
+            "position": {
+                "x": 100,
+                "y": 300
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "dnsServers": [
+                "8.8.8.8"
+            ],
+            "dhcpServers": []
+        },
+        {
+            "id": "pc-2",
+            "type": "pc",
+            "name": "PC2",
+            "hostname": "pc2",
+            "interfaces": [
+                {
+                    "id": "pc2-eth0",
+                    "name": "eth0",
+                    "macAddress": "00:11:22:33:44:02",
+                    "ipAddress": "192.168.1.20",
+                    "subnetMask": "255.255.255.0",
+                    "gateway": "192.168.1.1",
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "sw1-fa1"
+                }
+            ],
+            "position": {
+                "x": 500,
+                "y": 300
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "dnsServers": [
+                "8.8.8.8"
+            ],
+            "dhcpServers": []
+        },
+        {
+            "id": "switch-1",
+            "type": "switch",
+            "name": "Switch1",
+            "hostname": "switch1",
+            "interfaces": [
+                {
+                    "id": "sw1-fa0",
+                    "name": "FastEthernet0/0",
+                    "macAddress": "AA:BB:CC:DD:EE:00",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "pc1-eth0"
+                },
+                {
+                    "id": "sw1-fa1",
+                    "name": "FastEthernet0/1",
+                    "macAddress": "AA:BB:CC:DD:EE:01",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "pc2-eth0"
+                },
+                {
+                    "id": "sw1-fa2",
+                    "name": "FastEthernet0/2",
+                    "macAddress": "AA:BB:CC:DD:EE:02",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1
+                },
+                {
+                    "id": "sw1-fa3",
+                    "name": "FastEthernet0/3",
+                    "macAddress": "AA:BB:CC:DD:EE:03",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1
+                }
+            ],
+            "position": {
+                "x": 300,
+                "y": 150
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "macTable": [],
+            "dhcpServers": []
+        }
+    ],
+    "connections": [
+        {
+            "id": "conn-1",
+            "sourceDeviceId": "pc-1",
+            "sourceInterfaceId": "pc1-eth0",
+            "targetDeviceId": "switch-1",
+            "targetInterfaceId": "sw1-fa0",
+            "isUp": true,
+            "bandwidth": 100,
+            "latency": 1,
+            "packetLoss": 0
+        },
+        {
+            "id": "conn-2",
+            "sourceDeviceId": "pc-2",
+            "sourceInterfaceId": "pc2-eth0",
+            "targetDeviceId": "switch-1",
+            "targetInterfaceId": "sw1-fa1",
+            "isUp": true,
+            "bandwidth": 100,
+            "latency": 1,
+            "packetLoss": 0
+        }
+    ]
+}

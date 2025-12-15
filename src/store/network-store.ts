@@ -189,7 +189,7 @@ interface NetworkStore {
 
   // Actions - MAC Table (for switches)
   learnMAC: (deviceId: string, macAddress: string, port: string, vlan?: number) => void;
-  lookupMAC: (deviceId: string, macAddress: string) => string | null;
+  lookupMAC: (deviceId: string, macAddress: string, vlan?: number) => string | null;
 
   // Actions - VLAN (for switches)
   addVlan: (deviceId: string, vlan: { id: number; name: string }) => boolean;
@@ -1159,7 +1159,8 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
       devices: state.devices.map((d) => {
         if (d.id !== deviceId || d.type !== 'switch') return d;
         const macTable = d.macTable || [];
-        const existingIndex = macTable.findIndex((e) => e.macAddress === macAddress);
+        // Look for existing entry with same MAC AND VLAN (VLAN-aware MAC learning)
+        const existingIndex = macTable.findIndex((e) => e.macAddress === macAddress && e.vlan === vlan);
         const entry: MacTableEntry = {
           macAddress,
           port,
@@ -1176,11 +1177,14 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
     }));
   },
 
-  lookupMAC: (deviceId, macAddress) => {
+  lookupMAC: (deviceId, macAddress, vlan) => {
     const device = get().getDeviceById(deviceId);
     if (!device || !device.macTable) return null;
     if (isBroadcastMAC(macAddress)) return 'broadcast';
-    const entry = device.macTable.find((e) => e.macAddress === macAddress);
+    // If VLAN is specified, filter by VLAN; otherwise return any matching entry
+    const entry = vlan !== undefined
+      ? device.macTable.find((e) => e.macAddress === macAddress && e.vlan === vlan)
+      : device.macTable.find((e) => e.macAddress === macAddress);
     return entry?.port || null;
   },
 
@@ -1251,6 +1255,37 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
     // Check if VLAN exists
     if (!device.vlans?.find((v) => v.id === svi.vlanId)) return false;
 
+    const sviInterfaceName = `Vlan${svi.vlanId}`;
+
+    // Helper to add connected route if IP is configured
+    const addConnectedRoute = (ipAddress: string, subnetMask: string) => {
+      const networkAddr = getNetworkAddress(ipAddress, subnetMask);
+      set((state) => ({
+        devices: state.devices.map((d) => {
+          if (d.id !== deviceId) return d;
+          const existingRoutes = d.routingTable || [];
+          // Remove any existing route for this network on this interface
+          const filteredRoutes = existingRoutes.filter(r =>
+            !(r.destination === networkAddr && r.interface === sviInterfaceName)
+          );
+          return {
+            ...d,
+            routingTable: [
+              ...filteredRoutes,
+              {
+                destination: networkAddr,
+                netmask: subnetMask,
+                gateway: '0.0.0.0',
+                interface: sviInterfaceName,
+                metric: 0,
+                type: 'connected' as const,
+              }
+            ]
+          };
+        }),
+      }));
+    };
+
     // Check if SVI already exists for this VLAN
     if (device.sviInterfaces?.find((s) => s.vlanId === svi.vlanId)) {
       // Update existing SVI
@@ -1265,18 +1300,30 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
           };
         }),
       }));
+      // Add connected route if IP is configured
+      if (svi.ipAddress && svi.subnetMask) {
+        addConnectedRoute(svi.ipAddress, svi.subnetMask);
+      }
       return true;
     }
 
+    // Generate a MAC address for the SVI
+    const sviMac = generateMacAddress();
     set((state) => ({
       devices: state.devices.map((d) => {
         if (d.id !== deviceId) return d;
         return {
           ...d,
-          sviInterfaces: [...(d.sviInterfaces || []), svi],
+          sviInterfaces: [...(d.sviInterfaces || []), { ...svi, macAddress: sviMac }],
         };
       }),
     }));
+
+    // Add connected route if IP is configured
+    if (svi.ipAddress && svi.subnetMask) {
+      addConnectedRoute(svi.ipAddress, svi.subnetMask);
+    }
+
     return true;
   },
 

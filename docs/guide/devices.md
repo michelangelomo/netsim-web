@@ -20,6 +20,8 @@ Learn how to add and configure network devices in NetSimWeb.
 
 - **Router** - Layer 3 device for routing between networks
 - **Switch** - Layer 2 device for local network switching
+  - Supports VLANs (access and trunk ports)
+  - Can be configured as Layer 3 switch with SVIs
 - **Hub** - Basic Layer 1 repeater (broadcasts all traffic)
 
 ### Security & Cloud
@@ -35,6 +37,15 @@ After placing a device, click on it to:
 - View and configure interfaces
 - Access the device terminal
 - Delete the device
+
+### Switch-Specific Properties
+
+Switches have additional configuration options:
+
+- **VLANs** - Create and manage VLANs
+- **SVIs** - Configure Layer 3 interfaces for inter-VLAN routing
+- **MAC Table** - View learned MAC addresses
+- **Interface VLAN Settings** - Configure access/trunk modes
 
 ## Tips
 

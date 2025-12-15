@@ -1,0 +1,852 @@
+{
+    "name": "Multi-Router Enterprise Network",
+    "description": "Enterprise network with multiple routers connecting three different subnets. Demonstrates routing between networks.",
+    "devices": [
+        {
+            "id": "router-core",
+            "type": "router",
+            "name": "Core-Router",
+            "hostname": "core-rtr",
+            "interfaces": [
+                {
+                    "id": "core-g0",
+                    "name": "GigabitEthernet0/0",
+                    "macAddress": "00:C0:RE:00:00:00",
+                    "ipAddress": "10.0.0.1",
+                    "subnetMask": "255.255.255.252",
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "branch1-g0"
+                },
+                {
+                    "id": "core-g1",
+                    "name": "GigabitEthernet0/1",
+                    "macAddress": "00:C0:RE:00:00:01",
+                    "ipAddress": "10.0.1.1",
+                    "subnetMask": "255.255.255.252",
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "branch2-g0"
+                },
+                {
+                    "id": "core-g2",
+                    "name": "GigabitEthernet0/2",
+                    "macAddress": "00:C0:RE:00:00:02",
+                    "ipAddress": "192.168.100.1",
+                    "subnetMask": "255.255.255.0",
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "dc-sw-fa0"
+                },
+                {
+                    "id": "core-g3",
+                    "name": "GigabitEthernet0/3",
+                    "macAddress": "00:C0:RE:00:00:03",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1
+                }
+            ],
+            "position": {
+                "x": 400,
+                "y": 50
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "routingTable": [
+                {
+                    "destination": "10.0.0.0",
+                    "netmask": "255.255.255.252",
+                    "gateway": "0.0.0.0",
+                    "interface": "GigabitEthernet0/0",
+                    "metric": 0,
+                    "type": "connected"
+                },
+                {
+                    "destination": "10.0.1.0",
+                    "netmask": "255.255.255.252",
+                    "gateway": "0.0.0.0",
+                    "interface": "GigabitEthernet0/1",
+                    "metric": 0,
+                    "type": "connected"
+                },
+                {
+                    "destination": "192.168.100.0",
+                    "netmask": "255.255.255.0",
+                    "gateway": "0.0.0.0",
+                    "interface": "GigabitEthernet0/2",
+                    "metric": 0,
+                    "type": "connected"
+                },
+                {
+                    "destination": "192.168.1.0",
+                    "netmask": "255.255.255.0",
+                    "gateway": "10.0.0.2",
+                    "interface": "GigabitEthernet0/0",
+                    "metric": 1,
+                    "type": "static"
+                },
+                {
+                    "destination": "192.168.2.0",
+                    "netmask": "255.255.255.0",
+                    "gateway": "10.0.1.2",
+                    "interface": "GigabitEthernet0/1",
+                    "metric": 1,
+                    "type": "static"
+                }
+            ],
+            "dhcpServers": []
+        },
+        {
+            "id": "router-branch1",
+            "type": "router",
+            "name": "Branch1-Router",
+            "hostname": "branch1-rtr",
+            "interfaces": [
+                {
+                    "id": "branch1-g0",
+                    "name": "GigabitEthernet0/0",
+                    "macAddress": "00:B1:00:00:00:00",
+                    "ipAddress": "10.0.0.2",
+                    "subnetMask": "255.255.255.252",
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "core-g0"
+                },
+                {
+                    "id": "branch1-g1",
+                    "name": "GigabitEthernet0/1",
+                    "macAddress": "00:B1:00:00:00:01",
+                    "ipAddress": "192.168.1.1",
+                    "subnetMask": "255.255.255.0",
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "branch1-sw-fa0"
+                },
+                {
+                    "id": "branch1-g2",
+                    "name": "GigabitEthernet0/2",
+                    "macAddress": "00:B1:00:00:00:02",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1
+                },
+                {
+                    "id": "branch1-g3",
+                    "name": "GigabitEthernet0/3",
+                    "macAddress": "00:B1:00:00:00:03",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1
+                }
+            ],
+            "position": {
+                "x": 100,
+                "y": 200
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "routingTable": [
+                {
+                    "destination": "10.0.0.0",
+                    "netmask": "255.255.255.252",
+                    "gateway": "0.0.0.0",
+                    "interface": "GigabitEthernet0/0",
+                    "metric": 0,
+                    "type": "connected"
+                },
+                {
+                    "destination": "192.168.1.0",
+                    "netmask": "255.255.255.0",
+                    "gateway": "0.0.0.0",
+                    "interface": "GigabitEthernet0/1",
+                    "metric": 0,
+                    "type": "connected"
+                },
+                {
+                    "destination": "0.0.0.0",
+                    "netmask": "0.0.0.0",
+                    "gateway": "10.0.0.1",
+                    "interface": "GigabitEthernet0/0",
+                    "metric": 1,
+                    "type": "static"
+                }
+            ],
+            "dhcpServers": [
+                {
+                    "enabled": true,
+                    "interfaceId": "branch1-g1",
+                    "interfaceName": "GigabitEthernet0/1",
+                    "poolStart": "192.168.1.100",
+                    "poolEnd": "192.168.1.200",
+                    "subnetMask": "255.255.255.0",
+                    "defaultGateway": "192.168.1.1",
+                    "dnsServers": [
+                        "8.8.8.8",
+                        "8.8.4.4"
+                    ],
+                    "leaseTime": 86400,
+                    "leases": [],
+                    "excludedAddresses": []
+                }
+            ]
+        },
+        {
+            "id": "router-branch2",
+            "type": "router",
+            "name": "Branch2-Router",
+            "hostname": "branch2-rtr",
+            "interfaces": [
+                {
+                    "id": "branch2-g0",
+                    "name": "GigabitEthernet0/0",
+                    "macAddress": "00:B2:00:00:00:00",
+                    "ipAddress": "10.0.1.2",
+                    "subnetMask": "255.255.255.252",
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "core-g1"
+                },
+                {
+                    "id": "branch2-g1",
+                    "name": "GigabitEthernet0/1",
+                    "macAddress": "00:B2:00:00:00:01",
+                    "ipAddress": "192.168.2.1",
+                    "subnetMask": "255.255.255.0",
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "branch2-sw-fa0"
+                },
+                {
+                    "id": "branch2-g2",
+                    "name": "GigabitEthernet0/2",
+                    "macAddress": "00:B2:00:00:00:02",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1
+                },
+                {
+                    "id": "branch2-g3",
+                    "name": "GigabitEthernet0/3",
+                    "macAddress": "00:B2:00:00:00:03",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1
+                }
+            ],
+            "position": {
+                "x": 700,
+                "y": 200
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "routingTable": [
+                {
+                    "destination": "10.0.1.0",
+                    "netmask": "255.255.255.252",
+                    "gateway": "0.0.0.0",
+                    "interface": "GigabitEthernet0/0",
+                    "metric": 0,
+                    "type": "connected"
+                },
+                {
+                    "destination": "192.168.2.0",
+                    "netmask": "255.255.255.0",
+                    "gateway": "0.0.0.0",
+                    "interface": "GigabitEthernet0/1",
+                    "metric": 0,
+                    "type": "connected"
+                },
+                {
+                    "destination": "0.0.0.0",
+                    "netmask": "0.0.0.0",
+                    "gateway": "10.0.1.1",
+                    "interface": "GigabitEthernet0/0",
+                    "metric": 1,
+                    "type": "static"
+                }
+            ],
+            "dhcpServers": [
+                {
+                    "enabled": true,
+                    "interfaceId": "branch2-g1",
+                    "interfaceName": "GigabitEthernet0/1",
+                    "poolStart": "192.168.2.100",
+                    "poolEnd": "192.168.2.200",
+                    "subnetMask": "255.255.255.0",
+                    "defaultGateway": "192.168.2.1",
+                    "dnsServers": [
+                        "8.8.8.8",
+                        "8.8.4.4"
+                    ],
+                    "leaseTime": 86400,
+                    "leases": [],
+                    "excludedAddresses": []
+                }
+            ]
+        },
+        {
+            "id": "switch-branch1",
+            "type": "switch",
+            "name": "Branch1-Switch",
+            "hostname": "branch1-sw",
+            "interfaces": [
+                {
+                    "id": "branch1-sw-fa0",
+                    "name": "FastEthernet0/0",
+                    "macAddress": "BB:01:00:00:00:00",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "branch1-g1"
+                },
+                {
+                    "id": "branch1-sw-fa1",
+                    "name": "FastEthernet0/1",
+                    "macAddress": "BB:01:00:00:00:01",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "b1-pc1-eth0"
+                },
+                {
+                    "id": "branch1-sw-fa2",
+                    "name": "FastEthernet0/2",
+                    "macAddress": "BB:01:00:00:00:02",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "b1-pc2-eth0"
+                },
+                {
+                    "id": "branch1-sw-fa3",
+                    "name": "FastEthernet0/3",
+                    "macAddress": "BB:01:00:00:00:03",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1
+                }
+            ],
+            "position": {
+                "x": 100,
+                "y": 400
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "macTable": [],
+            "dhcpServers": []
+        },
+        {
+            "id": "switch-branch2",
+            "type": "switch",
+            "name": "Branch2-Switch",
+            "hostname": "branch2-sw",
+            "interfaces": [
+                {
+                    "id": "branch2-sw-fa0",
+                    "name": "FastEthernet0/0",
+                    "macAddress": "BB:02:00:00:00:00",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "branch2-g1"
+                },
+                {
+                    "id": "branch2-sw-fa1",
+                    "name": "FastEthernet0/1",
+                    "macAddress": "BB:02:00:00:00:01",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "b2-pc1-eth0"
+                },
+                {
+                    "id": "branch2-sw-fa2",
+                    "name": "FastEthernet0/2",
+                    "macAddress": "BB:02:00:00:00:02",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "b2-pc2-eth0"
+                },
+                {
+                    "id": "branch2-sw-fa3",
+                    "name": "FastEthernet0/3",
+                    "macAddress": "BB:02:00:00:00:03",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1
+                }
+            ],
+            "position": {
+                "x": 700,
+                "y": 400
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "macTable": [],
+            "dhcpServers": []
+        },
+        {
+            "id": "switch-dc",
+            "type": "switch",
+            "name": "DataCenter-Switch",
+            "hostname": "dc-sw",
+            "interfaces": [
+                {
+                    "id": "dc-sw-fa0",
+                    "name": "FastEthernet0/0",
+                    "macAddress": "DD:CC:00:00:00:00",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "core-g2"
+                },
+                {
+                    "id": "dc-sw-fa1",
+                    "name": "FastEthernet0/1",
+                    "macAddress": "DD:CC:00:00:00:01",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "web-srv-eth0"
+                },
+                {
+                    "id": "dc-sw-fa2",
+                    "name": "FastEthernet0/2",
+                    "macAddress": "DD:CC:00:00:00:02",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "db-srv-eth0"
+                },
+                {
+                    "id": "dc-sw-fa3",
+                    "name": "FastEthernet0/3",
+                    "macAddress": "DD:CC:00:00:00:03",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1
+                }
+            ],
+            "position": {
+                "x": 400,
+                "y": 200
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "macTable": [],
+            "dhcpServers": []
+        },
+        {
+            "id": "pc-branch1-1",
+            "type": "pc",
+            "name": "Branch1-PC1",
+            "hostname": "b1-pc1",
+            "interfaces": [
+                {
+                    "id": "b1-pc1-eth0",
+                    "name": "eth0",
+                    "macAddress": "00:B1:PC:01:00:00",
+                    "ipAddress": "192.168.1.10",
+                    "subnetMask": "255.255.255.0",
+                    "gateway": "192.168.1.1",
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "branch1-sw-fa1"
+                }
+            ],
+            "position": {
+                "x": 0,
+                "y": 550
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "dnsServers": [
+                "8.8.8.8"
+            ],
+            "dhcpServers": []
+        },
+        {
+            "id": "pc-branch1-2",
+            "type": "pc",
+            "name": "Branch1-PC2",
+            "hostname": "b1-pc2",
+            "interfaces": [
+                {
+                    "id": "b1-pc2-eth0",
+                    "name": "eth0",
+                    "macAddress": "00:B1:PC:02:00:00",
+                    "ipAddress": "192.168.1.20",
+                    "subnetMask": "255.255.255.0",
+                    "gateway": "192.168.1.1",
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "branch1-sw-fa2"
+                }
+            ],
+            "position": {
+                "x": 200,
+                "y": 550
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "dnsServers": [
+                "8.8.8.8"
+            ],
+            "dhcpServers": []
+        },
+        {
+            "id": "pc-branch2-1",
+            "type": "pc",
+            "name": "Branch2-PC1",
+            "hostname": "b2-pc1",
+            "interfaces": [
+                {
+                    "id": "b2-pc1-eth0",
+                    "name": "eth0",
+                    "macAddress": "00:B2:PC:01:00:00",
+                    "ipAddress": "192.168.2.10",
+                    "subnetMask": "255.255.255.0",
+                    "gateway": "192.168.2.1",
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "branch2-sw-fa1"
+                }
+            ],
+            "position": {
+                "x": 600,
+                "y": 550
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "dnsServers": [
+                "8.8.8.8"
+            ],
+            "dhcpServers": []
+        },
+        {
+            "id": "pc-branch2-2",
+            "type": "pc",
+            "name": "Branch2-PC2",
+            "hostname": "b2-pc2",
+            "interfaces": [
+                {
+                    "id": "b2-pc2-eth0",
+                    "name": "eth0",
+                    "macAddress": "00:B2:PC:02:00:00",
+                    "ipAddress": "192.168.2.20",
+                    "subnetMask": "255.255.255.0",
+                    "gateway": "192.168.2.1",
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "branch2-sw-fa2"
+                }
+            ],
+            "position": {
+                "x": 800,
+                "y": 550
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "dnsServers": [
+                "8.8.8.8"
+            ],
+            "dhcpServers": []
+        },
+        {
+            "id": "server-web",
+            "type": "server",
+            "name": "Web-Server",
+            "hostname": "web-srv",
+            "interfaces": [
+                {
+                    "id": "web-srv-eth0",
+                    "name": "eth0",
+                    "macAddress": "00:DC:SV:01:00:00",
+                    "ipAddress": "192.168.100.10",
+                    "subnetMask": "255.255.255.0",
+                    "gateway": "192.168.100.1",
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "dc-sw-fa1"
+                }
+            ],
+            "position": {
+                "x": 300,
+                "y": 350
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "dnsServers": [
+                "8.8.8.8"
+            ],
+            "dhcpServers": []
+        },
+        {
+            "id": "server-db",
+            "type": "server",
+            "name": "DB-Server",
+            "hostname": "db-srv",
+            "interfaces": [
+                {
+                    "id": "db-srv-eth0",
+                    "name": "eth0",
+                    "macAddress": "00:DC:SV:02:00:00",
+                    "ipAddress": "192.168.100.20",
+                    "subnetMask": "255.255.255.0",
+                    "gateway": "192.168.100.1",
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "dc-sw-fa2"
+                }
+            ],
+            "position": {
+                "x": 500,
+                "y": 350
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "dnsServers": [
+                "8.8.8.8"
+            ],
+            "dhcpServers": []
+        }
+    ],
+    "connections": [
+        {
+            "id": "conn-core-b1",
+            "sourceDeviceId": "router-core",
+            "sourceInterfaceId": "core-g0",
+            "targetDeviceId": "router-branch1",
+            "targetInterfaceId": "branch1-g0",
+            "isUp": true,
+            "bandwidth": 1000,
+            "latency": 5,
+            "packetLoss": 0
+        },
+        {
+            "id": "conn-core-b2",
+            "sourceDeviceId": "router-core",
+            "sourceInterfaceId": "core-g1",
+            "targetDeviceId": "router-branch2",
+            "targetInterfaceId": "branch2-g0",
+            "isUp": true,
+            "bandwidth": 1000,
+            "latency": 5,
+            "packetLoss": 0
+        },
+        {
+            "id": "conn-core-dc",
+            "sourceDeviceId": "router-core",
+            "sourceInterfaceId": "core-g2",
+            "targetDeviceId": "switch-dc",
+            "targetInterfaceId": "dc-sw-fa0",
+            "isUp": true,
+            "bandwidth": 1000,
+            "latency": 1,
+            "packetLoss": 0
+        },
+        {
+            "id": "conn-b1-sw",
+            "sourceDeviceId": "router-branch1",
+            "sourceInterfaceId": "branch1-g1",
+            "targetDeviceId": "switch-branch1",
+            "targetInterfaceId": "branch1-sw-fa0",
+            "isUp": true,
+            "bandwidth": 100,
+            "latency": 1,
+            "packetLoss": 0
+        },
+        {
+            "id": "conn-b2-sw",
+            "sourceDeviceId": "router-branch2",
+            "sourceInterfaceId": "branch2-g1",
+            "targetDeviceId": "switch-branch2",
+            "targetInterfaceId": "branch2-sw-fa0",
+            "isUp": true,
+            "bandwidth": 100,
+            "latency": 1,
+            "packetLoss": 0
+        },
+        {
+            "id": "conn-b1-pc1",
+            "sourceDeviceId": "pc-branch1-1",
+            "sourceInterfaceId": "b1-pc1-eth0",
+            "targetDeviceId": "switch-branch1",
+            "targetInterfaceId": "branch1-sw-fa1",
+            "isUp": true,
+            "bandwidth": 100,
+            "latency": 1,
+            "packetLoss": 0
+        },
+        {
+            "id": "conn-b1-pc2",
+            "sourceDeviceId": "pc-branch1-2",
+            "sourceInterfaceId": "b1-pc2-eth0",
+            "targetDeviceId": "switch-branch1",
+            "targetInterfaceId": "branch1-sw-fa2",
+            "isUp": true,
+            "bandwidth": 100,
+            "latency": 1,
+            "packetLoss": 0
+        },
+        {
+            "id": "conn-b2-pc1",
+            "sourceDeviceId": "pc-branch2-1",
+            "sourceInterfaceId": "b2-pc1-eth0",
+            "targetDeviceId": "switch-branch2",
+            "targetInterfaceId": "branch2-sw-fa1",
+            "isUp": true,
+            "bandwidth": 100,
+            "latency": 1,
+            "packetLoss": 0
+        },
+        {
+            "id": "conn-b2-pc2",
+            "sourceDeviceId": "pc-branch2-2",
+            "sourceInterfaceId": "b2-pc2-eth0",
+            "targetDeviceId": "switch-branch2",
+            "targetInterfaceId": "branch2-sw-fa2",
+            "isUp": true,
+            "bandwidth": 100,
+            "latency": 1,
+            "packetLoss": 0
+        },
+        {
+            "id": "conn-dc-web",
+            "sourceDeviceId": "server-web",
+            "sourceInterfaceId": "web-srv-eth0",
+            "targetDeviceId": "switch-dc",
+            "targetInterfaceId": "dc-sw-fa1",
+            "isUp": true,
+            "bandwidth": 1000,
+            "latency": 1,
+            "packetLoss": 0
+        },
+        {
+            "id": "conn-dc-db",
+            "sourceDeviceId": "server-db",
+            "sourceInterfaceId": "db-srv-eth0",
+            "targetDeviceId": "switch-dc",
+            "targetInterfaceId": "dc-sw-fa2",
+            "isUp": true,
+            "bandwidth": 1000,
+            "latency": 1,
+            "packetLoss": 0
+        }
+    ]
+}

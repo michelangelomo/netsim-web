@@ -1,0 +1,402 @@
+{
+    "name": "DHCP Server Setup",
+    "description": "Router acting as a DHCP server providing IP addresses to PCs. Demonstrates DHCP configuration with address pools.",
+    "devices": [
+        {
+            "id": "dhcp-router",
+            "type": "router",
+            "name": "DHCP-Router",
+            "hostname": "dhcp-rtr",
+            "interfaces": [
+                {
+                    "id": "dhcp-g0",
+                    "name": "GigabitEthernet0/0",
+                    "macAddress": "00:DD:CC:PP:00:00",
+                    "ipAddress": "192.168.10.1",
+                    "subnetMask": "255.255.255.0",
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "sw-fa0"
+                },
+                {
+                    "id": "dhcp-g1",
+                    "name": "GigabitEthernet0/1",
+                    "macAddress": "00:DD:CC:PP:00:01",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1
+                },
+                {
+                    "id": "dhcp-g2",
+                    "name": "GigabitEthernet0/2",
+                    "macAddress": "00:DD:CC:PP:00:02",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1
+                },
+                {
+                    "id": "dhcp-g3",
+                    "name": "GigabitEthernet0/3",
+                    "macAddress": "00:DD:CC:PP:00:03",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1
+                }
+            ],
+            "position": {
+                "x": 300,
+                "y": 50
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "routingTable": [
+                {
+                    "destination": "192.168.10.0",
+                    "netmask": "255.255.255.0",
+                    "gateway": "0.0.0.0",
+                    "interface": "GigabitEthernet0/0",
+                    "metric": 0,
+                    "type": "connected"
+                }
+            ],
+            "dhcpServers": [
+                {
+                    "enabled": true,
+                    "interfaceId": "dhcp-g0",
+                    "interfaceName": "GigabitEthernet0/0",
+                    "poolStart": "192.168.10.100",
+                    "poolEnd": "192.168.10.200",
+                    "subnetMask": "255.255.255.0",
+                    "defaultGateway": "192.168.10.1",
+                    "dnsServers": [
+                        "8.8.8.8",
+                        "8.8.4.4"
+                    ],
+                    "leaseTime": 86400,
+                    "leases": [],
+                    "excludedAddresses": [
+                        "192.168.10.1",
+                        "192.168.10.2",
+                        "192.168.10.3"
+                    ]
+                }
+            ]
+        },
+        {
+            "id": "switch-main",
+            "type": "switch",
+            "name": "Main-Switch",
+            "hostname": "main-sw",
+            "interfaces": [
+                {
+                    "id": "sw-fa0",
+                    "name": "FastEthernet0/0",
+                    "macAddress": "BB:00:00:00:00:00",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "dhcp-g0"
+                },
+                {
+                    "id": "sw-fa1",
+                    "name": "FastEthernet0/1",
+                    "macAddress": "BB:00:00:00:00:01",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "dhcp-pc1-eth0"
+                },
+                {
+                    "id": "sw-fa2",
+                    "name": "FastEthernet0/2",
+                    "macAddress": "BB:00:00:00:00:02",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "dhcp-pc2-eth0"
+                },
+                {
+                    "id": "sw-fa3",
+                    "name": "FastEthernet0/3",
+                    "macAddress": "BB:00:00:00:00:03",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "dhcp-pc3-eth0"
+                },
+                {
+                    "id": "sw-fa4",
+                    "name": "FastEthernet0/4",
+                    "macAddress": "BB:00:00:00:00:04",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "static-pc-eth0"
+                },
+                {
+                    "id": "sw-fa5",
+                    "name": "FastEthernet0/5",
+                    "macAddress": "BB:00:00:00:00:05",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1
+                },
+                {
+                    "id": "sw-fa6",
+                    "name": "FastEthernet0/6",
+                    "macAddress": "BB:00:00:00:00:06",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1
+                },
+                {
+                    "id": "sw-fa7",
+                    "name": "FastEthernet0/7",
+                    "macAddress": "BB:00:00:00:00:07",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1
+                }
+            ],
+            "position": {
+                "x": 300,
+                "y": 200
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "macTable": [],
+            "dhcpServers": []
+        },
+        {
+            "id": "dhcp-client-1",
+            "type": "pc",
+            "name": "DHCP-Client-1",
+            "hostname": "dhcp-pc1",
+            "interfaces": [
+                {
+                    "id": "dhcp-pc1-eth0",
+                    "name": "eth0",
+                    "macAddress": "00:DC:01:00:00:00",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "dhcpEnabled": true,
+                    "connectedTo": "sw-fa1"
+                }
+            ],
+            "position": {
+                "x": 100,
+                "y": 400
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "dnsServers": [],
+            "dhcpServers": []
+        },
+        {
+            "id": "dhcp-client-2",
+            "type": "pc",
+            "name": "DHCP-Client-2",
+            "hostname": "dhcp-pc2",
+            "interfaces": [
+                {
+                    "id": "dhcp-pc2-eth0",
+                    "name": "eth0",
+                    "macAddress": "00:DC:02:00:00:00",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "dhcpEnabled": true,
+                    "connectedTo": "sw-fa2"
+                }
+            ],
+            "position": {
+                "x": 300,
+                "y": 400
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "dnsServers": [],
+            "dhcpServers": []
+        },
+        {
+            "id": "dhcp-client-3",
+            "type": "pc",
+            "name": "DHCP-Client-3",
+            "hostname": "dhcp-pc3",
+            "interfaces": [
+                {
+                    "id": "dhcp-pc3-eth0",
+                    "name": "eth0",
+                    "macAddress": "00:DC:03:00:00:00",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "dhcpEnabled": true,
+                    "connectedTo": "sw-fa3"
+                }
+            ],
+            "position": {
+                "x": 500,
+                "y": 400
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "dnsServers": [],
+            "dhcpServers": []
+        },
+        {
+            "id": "static-pc",
+            "type": "pc",
+            "name": "Static-IP-PC",
+            "hostname": "static-pc",
+            "interfaces": [
+                {
+                    "id": "static-pc-eth0",
+                    "name": "eth0",
+                    "macAddress": "00:ST:00:00:00:00",
+                    "ipAddress": "192.168.10.50",
+                    "subnetMask": "255.255.255.0",
+                    "gateway": "192.168.10.1",
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "sw-fa4"
+                }
+            ],
+            "position": {
+                "x": 700,
+                "y": 400
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "dnsServers": [
+                "8.8.8.8"
+            ],
+            "dhcpServers": []
+        }
+    ],
+    "connections": [
+        {
+            "id": "conn-rtr-sw",
+            "sourceDeviceId": "dhcp-router",
+            "sourceInterfaceId": "dhcp-g0",
+            "targetDeviceId": "switch-main",
+            "targetInterfaceId": "sw-fa0",
+            "isUp": true,
+            "bandwidth": 100,
+            "latency": 1,
+            "packetLoss": 0
+        },
+        {
+            "id": "conn-pc1",
+            "sourceDeviceId": "dhcp-client-1",
+            "sourceInterfaceId": "dhcp-pc1-eth0",
+            "targetDeviceId": "switch-main",
+            "targetInterfaceId": "sw-fa1",
+            "isUp": true,
+            "bandwidth": 100,
+            "latency": 1,
+            "packetLoss": 0
+        },
+        {
+            "id": "conn-pc2",
+            "sourceDeviceId": "dhcp-client-2",
+            "sourceInterfaceId": "dhcp-pc2-eth0",
+            "targetDeviceId": "switch-main",
+            "targetInterfaceId": "sw-fa2",
+            "isUp": true,
+            "bandwidth": 100,
+            "latency": 1,
+            "packetLoss": 0
+        },
+        {
+            "id": "conn-pc3",
+            "sourceDeviceId": "dhcp-client-3",
+            "sourceInterfaceId": "dhcp-pc3-eth0",
+            "targetDeviceId": "switch-main",
+            "targetInterfaceId": "sw-fa3",
+            "isUp": true,
+            "bandwidth": 100,
+            "latency": 1,
+            "packetLoss": 0
+        },
+        {
+            "id": "conn-static",
+            "sourceDeviceId": "static-pc",
+            "sourceInterfaceId": "static-pc-eth0",
+            "targetDeviceId": "switch-main",
+            "targetInterfaceId": "sw-fa4",
+            "isUp": true,
+            "bandwidth": 100,
+            "latency": 1,
+            "packetLoss": 0
+        }
+    ]
+}

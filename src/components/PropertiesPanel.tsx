@@ -20,6 +20,9 @@ import {
   RefreshCw,
   Power,
   PowerOff,
+  Layers,
+  Plus,
+  Globe,
 } from 'lucide-react';
 import { useNetworkStore } from '@/store/network-store';
 import { isValidIP, isValidSubnetMask, cidrToSubnetMask, subnetMaskToCidr } from '@/lib/network-utils';
@@ -30,6 +33,7 @@ export function PropertiesPanel() {
     selectDevice,
     devices,
     updateDevice,
+    updateInterface,
     configureInterface,
     removeDevice,
     duplicateDevice,
@@ -39,6 +43,10 @@ export function PropertiesPanel() {
     configureDhcpServer,
     requestDhcp,
     releaseDhcp,
+    addVlan,
+    removeVlan,
+    addSvi,
+    removeSvi,
   } = useNetworkStore();
 
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
@@ -71,6 +79,19 @@ export function PropertiesPanel() {
     iface: '',
     metric: '1',
   });
+
+  // VLAN state
+  const [addingVlan, setAddingVlan] = useState(false);
+  const [vlanForm, setVlanForm] = useState({ id: '', name: '' });
+  const [editingVlanInterface, setEditingVlanInterface] = useState<string | null>(null);
+  const [vlanInterfaceForm, setVlanInterfaceForm] = useState({
+    vlanMode: 'access' as 'access' | 'trunk',
+    accessVlan: '1',
+    nativeVlan: '1',
+    allowedVlans: '1',
+  });
+  const [addingSvi, setAddingSvi] = useState(false);
+  const [sviForm, setSviForm] = useState({ vlanId: '', ipAddress: '', subnetMask: '255.255.255.0' });
 
   const device = selectedDeviceId ? devices.find((d) => d.id === selectedDeviceId) : null;
 
@@ -256,6 +277,111 @@ export function PropertiesPanel() {
       releaseDhcp(device.id, interfaceId);
     },
     [device, releaseDhcp]
+  );
+
+  // VLAN handlers
+  const handleAddVlan = useCallback(() => {
+    if (!device) return;
+    const vlanId = parseInt(vlanForm.id, 10);
+    if (isNaN(vlanId) || vlanId < 1 || vlanId > 4094) {
+      alert('VLAN ID must be between 1 and 4094');
+      return;
+    }
+    const name = vlanForm.name.trim() || `VLAN${vlanId}`;
+    const success = addVlan(device.id, { id: vlanId, name });
+    if (!success) {
+      alert('Failed to add VLAN. It may already exist.');
+      return;
+    }
+    setVlanForm({ id: '', name: '' });
+    setAddingVlan(false);
+  }, [device, vlanForm, addVlan]);
+
+  const handleRemoveVlan = useCallback(
+    (vlanId: number) => {
+      if (!device) return;
+      if (vlanId === 1) {
+        alert('Cannot remove VLAN 1 (default)');
+        return;
+      }
+      if (confirm(`Delete VLAN ${vlanId}?`)) {
+        removeVlan(device.id, vlanId);
+      }
+    },
+    [device, removeVlan]
+  );
+
+  const handleEditVlanInterface = useCallback(
+    (interfaceId: string) => {
+      if (!device) return;
+      const iface = device.interfaces.find((i) => i.id === interfaceId);
+      if (!iface) return;
+      setVlanInterfaceForm({
+        vlanMode: iface.vlanMode || 'access',
+        accessVlan: String(iface.accessVlan ?? 1),
+        nativeVlan: String(iface.nativeVlan ?? 1),
+        allowedVlans: (iface.allowedVlans ?? [1]).join(','),
+      });
+      setEditingVlanInterface(interfaceId);
+    },
+    [device]
+  );
+
+  const handleSaveVlanInterface = useCallback(() => {
+    if (!device || !editingVlanInterface) return;
+    const accessVlan = parseInt(vlanInterfaceForm.accessVlan, 10) || 1;
+    const nativeVlan = parseInt(vlanInterfaceForm.nativeVlan, 10) || 1;
+    const allowedVlans = vlanInterfaceForm.allowedVlans
+      .split(',')
+      .map((v) => parseInt(v.trim(), 10))
+      .filter((v) => !isNaN(v) && v >= 1 && v <= 4094);
+
+    updateInterface(device.id, editingVlanInterface, {
+      vlanMode: vlanInterfaceForm.vlanMode,
+      accessVlan,
+      nativeVlan,
+      allowedVlans: allowedVlans.length > 0 ? allowedVlans : [1],
+    });
+    setEditingVlanInterface(null);
+  }, [device, editingVlanInterface, vlanInterfaceForm, updateInterface]);
+
+  const handleAddSvi = useCallback(() => {
+    if (!device) return;
+    const vlanId = parseInt(sviForm.vlanId, 10);
+    if (isNaN(vlanId)) {
+      alert('Please select a VLAN');
+      return;
+    }
+    if (sviForm.ipAddress && !isValidIP(sviForm.ipAddress)) {
+      alert('Invalid IP address');
+      return;
+    }
+    if (sviForm.subnetMask && !isValidSubnetMask(sviForm.subnetMask)) {
+      alert('Invalid subnet mask');
+      return;
+    }
+    const success = addSvi(device.id, {
+      vlanId,
+      ipAddress: sviForm.ipAddress || undefined,
+      subnetMask: sviForm.subnetMask || undefined,
+      isUp: true,
+    });
+    if (!success) {
+      alert('Failed to add SVI. VLAN may not exist or SVI already exists.');
+      return;
+    }
+    setSviForm({ vlanId: '', ipAddress: '', subnetMask: '255.255.255.0' });
+    setAddingSvi(false);
+  }, [device, sviForm, addSvi]);
+
+  const handleRemoveSvi = useCallback(
+    (vlanId: number) => {
+      if (!device) return;
+      if (confirm(`Delete SVI for VLAN ${vlanId}?`)) {
+        removeSvi(device.id, vlanId);
+      }
+    },
+    [device, removeSvi]
   );
 
   // Routing table handlers
@@ -577,6 +703,108 @@ export function PropertiesPanel() {
                         <span className="text-dark-400">Status:</span>
                         <span className="text-emerald-400">Connected</span>
                       </div>
+                    )}
+                    {/* VLAN info for switches */}
+                    {device.type === 'switch' && (
+                      <>
+                        <div className="flex justify-between">
+                          <span className="text-dark-400">Mode:</span>
+                          <span className="text-cyan-400 capitalize">{iface.vlanMode || 'access'}</span>
+                        </div>
+                        {(iface.vlanMode || 'access') === 'access' ? (
+                          <div className="flex justify-between">
+                            <span className="text-dark-400">Access VLAN:</span>
+                            <span className="text-dark-200">{iface.accessVlan ?? 1}</span>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex justify-between">
+                              <span className="text-dark-400">Native VLAN:</span>
+                              <span className="text-dark-200">{iface.nativeVlan ?? 1}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-dark-400">Allowed:</span>
+                              <span className="text-dark-200 text-[10px]">{(iface.allowedVlans ?? [1]).join(',')}</span>
+                            </div>
+                          </>
+                        )}
+                        {/* VLAN Config Button */}
+                        {editingVlanInterface === iface.id ? (
+                          <div className="mt-2 pt-2 border-t border-dark-700 space-y-2">
+                            <div>
+                              <label className="text-xs text-dark-400 mb-1 block">Mode</label>
+                              <select
+                                value={vlanInterfaceForm.vlanMode}
+                                onChange={(e) => setVlanInterfaceForm((p) => ({ ...p, vlanMode: e.target.value as 'access' | 'trunk' }))}
+                                className="w-full bg-dark-900 border border-dark-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
+                              >
+                                <option value="access">Access</option>
+                                <option value="trunk">Trunk</option>
+                              </select>
+                            </div>
+                            {vlanInterfaceForm.vlanMode === 'access' ? (
+                              <div>
+                                <label className="text-xs text-dark-400 mb-1 block">Access VLAN</label>
+                                <select
+                                  value={vlanInterfaceForm.accessVlan}
+                                  onChange={(e) => setVlanInterfaceForm((p) => ({ ...p, accessVlan: e.target.value }))}
+                                  className="w-full bg-dark-900 border border-dark-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
+                                >
+                                  {(device.vlans || [{ id: 1, name: 'default' }]).map((v) => (
+                                    <option key={v.id} value={v.id}>VLAN {v.id}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            ) : (
+                              <>
+                                <div>
+                                  <label className="text-xs text-dark-400 mb-1 block">Native VLAN</label>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    max="4094"
+                                    value={vlanInterfaceForm.nativeVlan}
+                                    onChange={(e) => setVlanInterfaceForm((p) => ({ ...p, nativeVlan: e.target.value }))}
+                                    className="w-full bg-dark-900 border border-dark-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-xs text-dark-400 mb-1 block">Allowed VLANs (comma-separated)</label>
+                                  <input
+                                    type="text"
+                                    value={vlanInterfaceForm.allowedVlans}
+                                    onChange={(e) => setVlanInterfaceForm((p) => ({ ...p, allowedVlans: e.target.value }))}
+                                    placeholder="1,10,20"
+                                    className="w-full bg-dark-900 border border-dark-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
+                                  />
+                                </div>
+                              </>
+                            )}
+                            <div className="flex gap-2">
+                              <button
+                                onClick={handleSaveVlanInterface}
+                                className="flex-1 px-3 py-1.5 bg-cyan-500 hover:bg-cyan-600 text-white text-xs font-medium rounded transition-colors"
+                              >
+                                Save
+                              </button>
+                              <button
+                                onClick={() => setEditingVlanInterface(null)}
+                                className="px-3 py-1.5 bg-dark-700 hover:bg-dark-600 text-dark-300 text-xs font-medium rounded transition-colors"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => handleEditVlanInterface(iface.id)}
+                            className="w-full mt-2 flex items-center justify-center gap-1 px-2 py-1.5 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 text-xs font-medium rounded transition-colors"
+                          >
+                            <Layers className="w-3 h-3" />
+                            Configure VLAN
+                          </button>
+                        )}
+                      </>
                     )}
                     {/* DHCP Client controls for PCs/laptops */}
                     {(device.type === 'pc' || device.type === 'laptop') && (
@@ -976,7 +1204,212 @@ export function PropertiesPanel() {
           </Section>
         )}
 
-        {/* MAC Table (for switches) */}
+        {/* VLANs (for switches) */}
+        {device.type === 'switch' && (
+          <Section
+            title="VLANs"
+            id="vlans"
+            expanded={expandedSections.has('vlans')}
+            onToggle={() => toggleSection('vlans')}
+            badge={(device.vlans?.length || 0).toString()}
+          >
+            <div className="space-y-2">
+              {/* VLAN List */}
+              {device.vlans?.map((vlan) => (
+                <div
+                  key={vlan.id}
+                  className="flex items-center justify-between bg-dark-800 rounded px-3 py-2"
+                >
+                  <div className="flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-cyan-400" />
+                    <span className="text-sm font-medium text-white">VLAN {vlan.id}</span>
+                    <span className="text-xs text-dark-400">{vlan.name}</span>
+                  </div>
+                  {vlan.id !== 1 && (
+                    <button
+                      onClick={() => handleRemoveVlan(vlan.id)}
+                      className="p-1 hover:bg-dark-600 rounded transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-dark-400 hover:text-rose-400" />
+                    </button>
+                  )}
+                </div>
+              ))}
+
+              {/* Add VLAN Form */}
+              {addingVlan ? (
+                <div className="bg-dark-800 rounded-lg p-3 border border-dark-700 space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs text-dark-400 mb-1 block">VLAN ID</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="4094"
+                        value={vlanForm.id}
+                        onChange={(e) => setVlanForm((p) => ({ ...p, id: e.target.value }))}
+                        placeholder="10"
+                        className="w-full bg-dark-900 border border-dark-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-dark-400 mb-1 block">Name</label>
+                      <input
+                        type="text"
+                        value={vlanForm.name}
+                        onChange={(e) => setVlanForm((p) => ({ ...p, name: e.target.value }))}
+                        placeholder="Sales"
+                        className="w-full bg-dark-900 border border-dark-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2 mt-2">
+                    <button
+                      onClick={handleAddVlan}
+                      className="flex-1 px-3 py-1.5 bg-cyan-500 hover:bg-cyan-600 text-white text-xs font-medium rounded transition-colors"
+                    >
+                      Add VLAN
+                    </button>
+                    <button
+                      onClick={() => setAddingVlan(false)}
+                      className="px-3 py-1.5 bg-dark-700 hover:bg-dark-600 text-dark-300 text-xs font-medium rounded transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setAddingVlan(true)}
+                  className="w-full flex items-center justify-center gap-1 px-3 py-2 border border-dashed border-dark-600 rounded-lg text-dark-400 hover:text-white hover:border-dark-500 transition-colors text-xs"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Add VLAN
+                </button>
+              )}
+            </div>
+          </Section>
+        )}
+
+        {/* SVI Interfaces (for switches) */}
+        {device.type === 'switch' && (
+          <Section
+            title="SVI Interfaces"
+            id="svi"
+            expanded={expandedSections.has('svi')}
+            onToggle={() => toggleSection('svi')}
+            badge={(device.sviInterfaces?.length || 0).toString()}
+          >
+            <div className="space-y-2">
+              {/* SVI List */}
+              {device.sviInterfaces?.map((svi) => (
+                <div
+                  key={svi.vlanId}
+                  className="bg-dark-800 rounded-lg p-3 border border-dark-700"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <Globe className="w-4 h-4 text-emerald-400" />
+                      <span className="text-sm font-medium text-white">Vlan{svi.vlanId}</span>
+                      <span className={`px-1.5 py-0.5 text-[10px] rounded ${svi.isUp ? 'bg-emerald-500/20 text-emerald-400' : 'bg-dark-700 text-dark-400'}`}>
+                        {svi.isUp ? 'UP' : 'DOWN'}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => handleRemoveSvi(svi.vlanId)}
+                      className="p-1 hover:bg-dark-600 rounded transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-dark-400 hover:text-rose-400" />
+                    </button>
+                  </div>
+                  <div className="text-xs space-y-1">
+                    <div className="flex justify-between">
+                      <span className="text-dark-400">IP:</span>
+                      <span className="text-dark-200 font-mono">{svi.ipAddress || 'Not configured'}</span>
+                    </div>
+                    {svi.subnetMask && (
+                      <div className="flex justify-between">
+                        <span className="text-dark-400">Mask:</span>
+                        <span className="text-dark-200 font-mono">{svi.subnetMask}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between">
+                      <span className="text-dark-400">MAC:</span>
+                      <span className="text-dark-200 font-mono text-[10px]">{svi.macAddress?.toLowerCase()}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {/* Add SVI Form */}
+              {addingSvi ? (
+                <div className="bg-dark-800 rounded-lg p-3 border border-dark-700 space-y-2">
+                  <div>
+                    <label className="text-xs text-dark-400 mb-1 block">VLAN</label>
+                    <select
+                      value={sviForm.vlanId}
+                      onChange={(e) => setSviForm((p) => ({ ...p, vlanId: e.target.value }))}
+                      className="w-full bg-dark-900 border border-dark-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
+                    >
+                      <option value="">Select VLAN...</option>
+                      {device.vlans
+                        ?.filter((v) => !device.sviInterfaces?.find((s) => s.vlanId === v.id))
+                        .map((v) => (
+                          <option key={v.id} value={v.id}>
+                            VLAN {v.id} - {v.name}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-dark-400 mb-1 block">IP Address</label>
+                    <input
+                      type="text"
+                      value={sviForm.ipAddress}
+                      onChange={(e) => setSviForm((p) => ({ ...p, ipAddress: e.target.value }))}
+                      placeholder="192.168.10.1"
+                      className="w-full bg-dark-900 border border-dark-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-dark-400 mb-1 block">Subnet Mask</label>
+                    <input
+                      type="text"
+                      value={sviForm.subnetMask}
+                      onChange={(e) => setSviForm((p) => ({ ...p, subnetMask: e.target.value }))}
+                      placeholder="255.255.255.0"
+                      className="w-full bg-dark-900 border border-dark-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div className="flex gap-2 mt-2">
+                    <button
+                      onClick={handleAddSvi}
+                      className="flex-1 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-medium rounded transition-colors"
+                    >
+                      Add SVI
+                    </button>
+                    <button
+                      onClick={() => setAddingSvi(false)}
+                      className="px-3 py-1.5 bg-dark-700 hover:bg-dark-600 text-dark-300 text-xs font-medium rounded transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setAddingSvi(true)}
+                  className="w-full flex items-center justify-center gap-1 px-3 py-2 border border-dashed border-dark-600 rounded-lg text-dark-400 hover:text-white hover:border-dark-500 transition-colors text-xs"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Add SVI
+                </button>
+              )}
+            </div>
+          </Section>
+        )}
+
+        {/* MAC Table (for switches) - Updated to show VLAN */}
         {device.macTable && device.macTable.length > 0 && (
           <Section
             title="MAC Address Table"
@@ -986,6 +1419,10 @@ export function PropertiesPanel() {
             badge={device.macTable.length.toString()}
           >
             <div className="space-y-1">
+              <div className="flex justify-between text-[10px] text-dark-500 pb-1 border-b border-dark-800">
+                <span>MAC Address</span>
+                <span>VLAN / Port</span>
+              </div>
               {device.macTable.map((entry, index) => (
                 <div
                   key={index}
@@ -994,7 +1431,11 @@ export function PropertiesPanel() {
                   <span className="font-mono text-dark-400 text-[10px]">
                     {entry.macAddress.toLowerCase()}
                   </span>
-                  <span className="text-dark-200">{entry.port}</span>
+                  <span className="text-dark-200">
+                    <span className="text-cyan-400 text-[10px]">{entry.vlan || 1}</span>
+                    <span className="text-dark-500 mx-1">/</span>
+                    {entry.port}
+                  </span>
                 </div>
               ))}
             </div>

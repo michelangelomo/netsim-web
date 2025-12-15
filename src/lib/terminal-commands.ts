@@ -288,6 +288,33 @@ Type 'help <command>' for detailed usage information.
             subnetMask: subnetMask,
             isUp: true,
           });
+
+          // Add connected route for this SVI
+          const networkAddr = getNetworkAddress(ipAddr, subnetMask);
+          const sviInterfaceName = `Vlan${ctx.currentSviVlanId}`;
+          const device = store.getDeviceById(deviceId);
+          const existingRoutes = device?.routingTable || [];
+
+          // Remove any existing route for this network on this interface
+          const filteredRoutes = existingRoutes.filter(r =>
+            !(r.destination === networkAddr && r.interface === sviInterfaceName)
+          );
+
+          // Add the connected route
+          store.updateDevice(deviceId, {
+            routingTable: [
+              ...filteredRoutes,
+              {
+                destination: networkAddr,
+                netmask: subnetMask,
+                gateway: '0.0.0.0',
+                interface: sviInterfaceName,
+                metric: 0,
+                type: 'connected' as const,
+              }
+            ]
+          });
+
           return { output: `IP address ${ipAddr} ${subnetMask} configured on VLAN ${ctx.currentSviVlanId}`, success: true };
         }
 

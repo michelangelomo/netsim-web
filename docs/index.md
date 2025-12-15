@@ -62,6 +62,22 @@ Welcome to **NetSimWeb** - a web-based network simulator for learning and teachi
 
     [:octicons-arrow-right-24: Commands](reference/commands.md)
 
+-   :material-lan:{ .lg .middle } **VLAN Configuration**
+
+    ---
+
+    Learn to segment networks with VLANs
+
+    [:octicons-arrow-right-24: VLAN Guide](guide/vlans.md)
+
+-   :material-file-document-multiple:{ .lg .middle } **Example Topologies**
+
+    ---
+
+    Pre-built networks for learning
+
+    [:octicons-arrow-right-24: Examples](guide/examples.md)
+
 </div>
 
 ## License

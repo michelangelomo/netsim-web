@@ -4,7 +4,7 @@ NetSimWeb runs entirely in your browser - no installation required!
 
 ## Using the Hosted Version
 
-Simply visit [NetSimWeb App](../app/) to start using the simulator.
+Simply visit [NetSimWeb App](https://michelangelomo.github.io/netsim-web/app/) to start using the simulator.
 
 ## Running Locally
 

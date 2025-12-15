@@ -13,6 +13,7 @@ import {
     isSameNetwork,
     getNetworkAddress,
     isBroadcastMAC,
+    isMulticastMAC,
     findBestRoute,
     ipToNumber,
 } from '@/lib/network-utils';
@@ -162,20 +163,280 @@ export function processDeviceTick(
     return processL3Logic(device, packet, connections, updateDevice);
 }
 
+// Determine the VLAN for a packet on ingress
+function getIngressVlan(packet: Packet, port: NetworkInterface): number | null {
+    const mode = port.vlanMode || 'access';
+
+    if (mode === 'access') {
+        // Access port: always use the configured access VLAN
+        return port.accessVlan ?? 1;
+    } else if (mode === 'trunk') {
+        // Trunk port: use packet's VLAN tag, or native VLAN if untagged
+        if (packet.vlanTag !== undefined) {
+            // Check if VLAN is allowed on trunk
+            const allowedVlans = port.allowedVlans ?? [1];
+            if (!allowedVlans.includes(packet.vlanTag)) {
+                return null; // VLAN not allowed - will drop packet
+            }
+            return packet.vlanTag;
+        } else {
+            // Untagged - use native VLAN
+            return port.nativeVlan ?? 1;
+        }
+    }
+
+    return 1; // Default to VLAN 1
+}
+
+// Check if a port should receive traffic for a given VLAN
+function portAllowsVlan(port: NetworkInterface, vlanId: number): boolean {
+    const mode = port.vlanMode || 'access';
+
+    if (mode === 'access') {
+        return (port.accessVlan ?? 1) === vlanId;
+    } else if (mode === 'trunk') {
+        const allowedVlans = port.allowedVlans ?? [1];
+        return allowedVlans.includes(vlanId);
+    }
+
+    return vlanId === 1; // Default behavior
+}
+
+// Process egress for a port - handle tagging/untagging
+function processEgressVlan(packet: Packet, port: NetworkInterface, vlanId: number): Packet {
+    const mode = port.vlanMode || 'access';
+    const newPacket = { ...packet };
+
+    if (mode === 'access') {
+        // Access port: remove VLAN tag (frames are untagged on access ports)
+        delete newPacket.vlanTag;
+    } else if (mode === 'trunk') {
+        // Trunk port: tag frame, unless it's the native VLAN
+        const nativeVlan = port.nativeVlan ?? 1;
+        if (vlanId === nativeVlan) {
+            // Native VLAN - send untagged
+            delete newPacket.vlanTag;
+        } else {
+            // Non-native VLAN - send tagged
+            newPacket.vlanTag = vlanId;
+        }
+    }
+
+    return newPacket;
+}
+
+// Process packets that need Layer 3 handling via SVI
+function processSviPacket(
+    device: NetworkDevice,
+    packet: Packet,
+    frameVlan: number,
+    connections: Connection[],
+    updateDevice: (id: string, updates: Partial<NetworkDevice>) => void
+): Packet[] | null {
+    // Only switches with SVIs can do inter-VLAN routing
+    if (!device.sviInterfaces || device.sviInterfaces.length === 0) {
+        return null;
+    }
+
+    // Find the SVI for the packet's VLAN
+    const ingressSvi = device.sviInterfaces.find(s => s.vlanId === frameVlan && s.isUp);
+
+    // Check if packet is destined to any SVI MAC (for L3 processing)
+    const destSvi = device.sviInterfaces.find(s => s.macAddress === packet.destMAC && s.isUp);
+
+    // Handle ARP requests for SVI IPs
+    if (packet.type === 'arp' && packet.payload?.type === 'request') {
+        const targetIP = packet.payload.targetIP || packet.destIP;
+        const sviForARP = device.sviInterfaces.find(s => s.ipAddress === targetIP && s.isUp);
+
+        if (sviForARP) {
+            // Generate ARP reply
+            const arpReply: Packet = {
+                id: uuidv4(),
+                sourceMAC: sviForARP.macAddress,
+                destMAC: packet.sourceMAC,
+                sourceIP: sviForARP.ipAddress!,
+                destIP: packet.sourceIP,
+                type: 'arp',
+                payload: {
+                    type: 'reply',
+                    senderMAC: sviForARP.macAddress,
+                    senderIP: sviForARP.ipAddress,
+                    targetMAC: packet.sourceMAC,
+                    targetIP: packet.sourceIP,
+                },
+                ttl: 64,
+                size: 42,
+                currentDeviceId: device.id,
+                sourceDeviceId: device.id,
+                path: [...(packet.path || []), device.id],
+                currentPathIndex: 0,
+                progress: 0,
+                processingStage: 'at-device',
+            };
+
+            // Find where to send the reply - use ingressInterface if known, or lookup MAC
+            let replyInterface: NetworkInterface | undefined;
+
+            // First try packet.ingressInterface
+            if (packet.ingressInterface) {
+                replyInterface = device.interfaces.find(i => i.name === packet.ingressInterface);
+            }
+
+            // Fall back to MAC table lookup
+            if (!replyInterface) {
+                const sourcePort = device.macTable?.find(e => e.macAddress === packet.sourceMAC && e.vlan === frameVlan)?.port;
+                if (sourcePort) {
+                    replyInterface = device.interfaces.find(i => i.name === sourcePort);
+                }
+            }
+
+            // Try to find connection by source device
+            if (!replyInterface && packet.sourceDeviceId) {
+                const conn = connections.find(c =>
+                    (c.sourceDeviceId === device.id && c.targetDeviceId === packet.sourceDeviceId) ||
+                    (c.targetDeviceId === device.id && c.sourceDeviceId === packet.sourceDeviceId)
+                );
+                if (conn) {
+                    const ifaceId = conn.sourceDeviceId === device.id ? conn.sourceInterfaceId : conn.targetInterfaceId;
+                    replyInterface = device.interfaces.find(i => i.id === ifaceId);
+                }
+            }
+
+            if (replyInterface?.connectedTo) {
+                const conn = connections.find(c => c.sourceInterfaceId === replyInterface!.id || c.targetInterfaceId === replyInterface!.id);
+                if (conn) {
+                    const targetDeviceId = conn.sourceDeviceId === device.id ? conn.targetDeviceId : conn.sourceDeviceId;
+                    arpReply.targetDeviceId = targetDeviceId;
+                    arpReply.lastDeviceId = device.id;
+                    return [arpReply];
+                }
+            }
+
+            // If we can't find the source port, return empty (ARP consumed but no reply sent)
+            return [];
+        }
+    }
+
+    // Handle packets destined to SVI MAC (inter-VLAN routing)
+    if (destSvi && packet.type !== 'arp') {
+        // This packet needs to be routed
+        const destIP = packet.destIP;
+        if (!destIP) return null;
+
+        // Find route for destination
+        const route = findRouteForIP(device, destIP);
+        if (!route) {
+            // No route, drop packet
+            return [];
+        }
+
+        // Find the egress SVI (based on route interface)
+        const egressVlanMatch = route.interface?.match(/Vlan(\d+)/i);
+        const egressVlanId = egressVlanMatch ? parseInt(egressVlanMatch[1], 10) : null;
+        const egressSvi = egressVlanId ? device.sviInterfaces.find(s => s.vlanId === egressVlanId && s.isUp) : null;
+
+        if (!egressSvi) {
+            return []; // No egress SVI, drop
+        }
+
+        // Look up destination MAC in ARP table
+        const arpEntry = device.arpTable?.find(e => e.ipAddress === destIP);
+        if (!arpEntry) {
+            // Would need to ARP for destination - for now just drop
+            // In a real implementation, we'd generate an ARP request
+            return [];
+        }
+
+        // Find egress port for destination MAC in egress VLAN
+        let egressPort = device.macTable?.find(e => e.macAddress === arpEntry.macAddress && e.vlan === egressVlanId)?.port;
+        if (!egressPort) {
+            // Unknown destination in egress VLAN - find any port in that VLAN
+            const portInfo = device.interfaces.find(i =>
+                i.isUp && i.connectedTo &&
+                portAllowsVlan(i, egressVlanId!)
+            );
+            if (!portInfo) return [];
+            egressPort = portInfo.name;
+        }
+
+        // Create routed packet
+        const routedPacket: Packet = {
+            ...packet,
+            id: uuidv4(),
+            sourceMAC: egressSvi.macAddress, // Source MAC is now egress SVI
+            destMAC: arpEntry.macAddress,    // Dest MAC is the final destination
+            ttl: (packet.ttl || 64) - 1,     // Decrement TTL
+            currentDeviceId: device.id,
+            lastDeviceId: device.id,
+            vlanTag: egressVlanId!,
+            path: [...(packet.path || []), device.id],
+            processingStage: 'at-device',
+        };
+
+        // TTL expired check
+        if (routedPacket.ttl <= 0) {
+            return [{ ...routedPacket, processingStage: 'dropped' }];
+        }
+
+        // Find the egress connection
+        const egressIface = egressPort
+            ? device.interfaces.find(i => i.name === egressPort)
+            : device.interfaces.find(i => i.isUp && i.connectedTo && portAllowsVlan(i, egressVlanId!));
+
+        if (!egressIface?.connectedTo) return [];
+
+        const egressConn = connections.find(c => c.sourceInterfaceId === egressIface.id || c.targetInterfaceId === egressIface.id);
+        if (!egressConn) return [];
+
+        const targetDeviceId = egressConn.sourceDeviceId === device.id ? egressConn.targetDeviceId : egressConn.sourceDeviceId;
+
+        // Process egress VLAN tagging
+        const finalPacket = processEgressVlan(routedPacket, egressIface, egressVlanId!);
+        finalPacket.targetDeviceId = targetDeviceId;
+        finalPacket.egressInterface = egressIface.name;
+
+        return [finalPacket];
+    }
+
+    return null; // Not SVI-related, continue with normal switch processing
+}
+
+// Find the best route for an IP address
+function findRouteForIP(device: NetworkDevice, destIP: string): { destination: string; interface?: string } | null {
+    const routes = device.routingTable || [];
+
+    for (const route of routes) {
+        const routeNet = route.destination;
+        const routeMask = route.netmask || '255.255.255.0';
+
+        // Check if destIP is in this network
+        const destNetwork = getNetworkAddress(destIP, routeMask);
+        if (destNetwork === routeNet) {
+            return route;
+        }
+    }
+
+    // Check for default route
+    const defaultRoute = routes.find(r => r.destination === '0.0.0.0');
+    return defaultRoute || null;
+}
+
 function processSwitchLogic(
     device: NetworkDevice,
     packet: Packet,
     connections: Connection[],
     updateDevice: (id: string, updates: Partial<NetworkDevice>) => void
 ): Packet[] {
-    // Find ingress connection
-    const ingressConnection = connections.find(
+    // Find ingress connection - use lastDeviceId or sourceDeviceId
+    const ingressDeviceId = packet.lastDeviceId || packet.sourceDeviceId;
+    const ingressConnection = ingressDeviceId ? connections.find(
         (c) =>
-            (c.sourceDeviceId === device.id && c.targetDeviceId === packet.lastDeviceId) ||
-            (c.targetDeviceId === device.id && c.sourceDeviceId === packet.lastDeviceId)
-    );
+            (c.sourceDeviceId === device.id && c.targetDeviceId === ingressDeviceId) ||
+            (c.targetDeviceId === device.id && c.sourceDeviceId === ingressDeviceId)
+    ) : null;
 
-    // If we can't determine ingress (e.g. packet created at switch?), assume no ingress
+    // Determine ingress interface
     const ingressInterfaceId = ingressConnection
         ? ingressConnection.sourceDeviceId === device.id
             ? ingressConnection.sourceInterfaceId
@@ -186,17 +447,41 @@ function processSwitchLogic(
         ? device.interfaces.find((i) => i.id === ingressInterfaceId)
         : null;
 
-    // 1. Learn MAC
-    if (ingressInterface) {
+    // If we have an ingress interface from packet.ingressInterface, use that
+    const effectiveIngressInterface = ingressInterface ||
+        (packet.ingressInterface ? device.interfaces.find(i => i.name === packet.ingressInterface) : null);
+
+    // 1. Determine VLAN for this frame
+    let frameVlan: number;
+    if (effectiveIngressInterface) {
+        const ingressVlan = getIngressVlan(packet, effectiveIngressInterface);
+        if (ingressVlan === null) {
+            // VLAN not allowed on trunk - drop packet
+            return [];
+        }
+        frameVlan = ingressVlan;
+    } else if (packet.vlanTag !== undefined) {
+        // Packet already has a VLAN tag (e.g., from test setup)
+        frameVlan = packet.vlanTag;
+    } else {
+        // Default to VLAN 1
+        frameVlan = 1;
+    }
+
+    // 2. Learn MAC with VLAN
+    if (effectiveIngressInterface) {
         const macTable = device.macTable || [];
-        const existingEntryIndex = macTable.findIndex((e) => e.macAddress === packet.sourceMAC);
+        // Look for existing entry with same MAC and VLAN
+        const existingEntryIndex = macTable.findIndex(
+            (e) => e.macAddress === packet.sourceMAC && e.vlan === frameVlan
+        );
 
         // Update if new or moved
-        if (existingEntryIndex === -1 || macTable[existingEntryIndex].port !== ingressInterface.name) {
+        if (existingEntryIndex === -1 || macTable[existingEntryIndex].port !== effectiveIngressInterface.name) {
             const newEntry: MacTableEntry = {
                 macAddress: packet.sourceMAC,
-                port: ingressInterface.name,
-                vlan: 1, // Default VLAN
+                port: effectiveIngressInterface.name,
+                vlan: frameVlan,
                 type: 'dynamic',
                 age: 0,
             };
@@ -209,34 +494,55 @@ function processSwitchLogic(
         }
     }
 
-    // 2. Forwarding Decision
+    // 2.5 Check if this packet is destined for an SVI (Layer 3 processing)
+    const sviResult = processSviPacket(device, packet, frameVlan, connections, updateDevice);
+    if (sviResult !== null) {
+        return sviResult;
+    }
+
+    // 3. Forwarding Decision (VLAN-aware)
     const destMac = packet.destMAC;
     let targetPorts: string[] = [];
 
-    if (isBroadcastMAC(destMac)) {
-        // Flood to all ports except ingress
+    if (isBroadcastMAC(destMac) || isMulticastMAC(destMac)) {
+        // Flood to all ports in the same VLAN except ingress
         targetPorts = device.interfaces
-            .filter((i) => i.isUp && i.connectedTo && i.id !== ingressInterfaceId)
+            .filter((i) =>
+                i.isUp &&
+                i.connectedTo &&
+                i.id !== ingressInterfaceId &&
+                i.name !== effectiveIngressInterface?.name &&
+                portAllowsVlan(i, frameVlan)
+            )
             .map((i) => i.name);
     } else {
-        // Unicast lookup
-        const entry = device.macTable?.find((e) => e.macAddress === destMac);
+        // Unicast lookup - must match both MAC and VLAN
+        const entry = device.macTable?.find(
+            (e) => e.macAddress === destMac && e.vlan === frameVlan
+        );
+
         if (entry) {
-            // Known unicast
-            if (entry.port === ingressInterface?.name) {
+            // Known unicast in same VLAN
+            if (entry.port === effectiveIngressInterface?.name) {
                 // Drop if dest is on same port (filtering)
                 return [];
             }
             targetPorts = [entry.port];
         } else {
-            // Unknown unicast -> Flood
+            // Unknown unicast -> Flood within VLAN
             targetPorts = device.interfaces
-                .filter((i) => i.isUp && i.connectedTo && i.id !== ingressInterfaceId)
+                .filter((i) =>
+                    i.isUp &&
+                    i.connectedTo &&
+                    i.id !== ingressInterfaceId &&
+                    i.name !== effectiveIngressInterface?.name &&
+                    portAllowsVlan(i, frameVlan)
+                )
                 .map((i) => i.name);
         }
     }
 
-    // 3. Create Packets for Targets
+    // 4. Create Packets for Targets
     const resultPackets: Packet[] = [];
 
     for (const portName of targetPorts) {
@@ -254,18 +560,21 @@ function processSwitchLogic(
                 ? connection.targetDeviceId
                 : connection.sourceDeviceId;
 
+            // Apply egress VLAN processing (tag/untag)
+            const egressPacket = processEgressVlan(packet, iface, frameVlan);
+
             // Clone packet for flooding/forwarding
-            // If unicast, we can reuse the packet object if we want, but cloning is safer
-            // If flooding, we MUST clone
             const newPacket: Packet = {
-                ...packet,
-                id: uuidv4(), // New ID for split packets
+                ...egressPacket,
+                id: uuidv4(),
                 currentDeviceId: device.id,
                 targetDeviceId: targetDeviceId,
                 lastDeviceId: device.id,
                 processingStage: 'on-link',
                 progress: 0,
                 path: addToPath(packet, device.id),
+                vlanTag: egressPacket.vlanTag, // May be undefined for access ports
+                egressInterface: iface.name,
             };
             resultPackets.push(newPacket);
         }

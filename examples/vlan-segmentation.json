@@ -1,0 +1,319 @@
+{
+    "name": "VLAN Segmentation",
+    "description": "Network with VLAN-based segmentation. VLAN 10 (Sales) and VLAN 20 (Engineering) on the same switch. PCs in different VLANs cannot communicate without a router.",
+    "devices": [
+        {
+            "id": "pc-sales-1",
+            "type": "pc",
+            "name": "Sales-PC1",
+            "hostname": "sales-pc1",
+            "interfaces": [
+                {
+                    "id": "sales1-eth0",
+                    "name": "eth0",
+                    "macAddress": "00:10:10:10:10:01",
+                    "ipAddress": "10.10.10.10",
+                    "subnetMask": "255.255.255.0",
+                    "gateway": "10.10.10.1",
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 10,
+                    "connectedTo": "sw1-fa0"
+                }
+            ],
+            "position": {
+                "x": 50,
+                "y": 100
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "dnsServers": [
+                "8.8.8.8"
+            ],
+            "dhcpServers": []
+        },
+        {
+            "id": "pc-sales-2",
+            "type": "pc",
+            "name": "Sales-PC2",
+            "hostname": "sales-pc2",
+            "interfaces": [
+                {
+                    "id": "sales2-eth0",
+                    "name": "eth0",
+                    "macAddress": "00:10:10:10:10:02",
+                    "ipAddress": "10.10.10.20",
+                    "subnetMask": "255.255.255.0",
+                    "gateway": "10.10.10.1",
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 10,
+                    "connectedTo": "sw1-fa1"
+                }
+            ],
+            "position": {
+                "x": 50,
+                "y": 300
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "dnsServers": [
+                "8.8.8.8"
+            ],
+            "dhcpServers": []
+        },
+        {
+            "id": "pc-eng-1",
+            "type": "pc",
+            "name": "Eng-PC1",
+            "hostname": "eng-pc1",
+            "interfaces": [
+                {
+                    "id": "eng1-eth0",
+                    "name": "eth0",
+                    "macAddress": "00:20:20:20:20:01",
+                    "ipAddress": "10.20.20.10",
+                    "subnetMask": "255.255.255.0",
+                    "gateway": "10.20.20.1",
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 20,
+                    "connectedTo": "sw1-fa2"
+                }
+            ],
+            "position": {
+                "x": 550,
+                "y": 100
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "dnsServers": [
+                "8.8.8.8"
+            ],
+            "dhcpServers": []
+        },
+        {
+            "id": "pc-eng-2",
+            "type": "pc",
+            "name": "Eng-PC2",
+            "hostname": "eng-pc2",
+            "interfaces": [
+                {
+                    "id": "eng2-eth0",
+                    "name": "eth0",
+                    "macAddress": "00:20:20:20:20:02",
+                    "ipAddress": "10.20.20.20",
+                    "subnetMask": "255.255.255.0",
+                    "gateway": "10.20.20.1",
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 20,
+                    "connectedTo": "sw1-fa3"
+                }
+            ],
+            "position": {
+                "x": 550,
+                "y": 300
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "dnsServers": [
+                "8.8.8.8"
+            ],
+            "dhcpServers": []
+        },
+        {
+            "id": "switch-1",
+            "type": "switch",
+            "name": "CoreSwitch",
+            "hostname": "core-sw",
+            "interfaces": [
+                {
+                    "id": "sw1-fa0",
+                    "name": "FastEthernet0/0",
+                    "macAddress": "AA:00:00:00:00:00",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 10,
+                    "switchportMode": "access",
+                    "accessVlan": 10,
+                    "connectedTo": "sales1-eth0"
+                },
+                {
+                    "id": "sw1-fa1",
+                    "name": "FastEthernet0/1",
+                    "macAddress": "AA:00:00:00:00:01",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 10,
+                    "switchportMode": "access",
+                    "accessVlan": 10,
+                    "connectedTo": "sales2-eth0"
+                },
+                {
+                    "id": "sw1-fa2",
+                    "name": "FastEthernet0/2",
+                    "macAddress": "AA:00:00:00:00:02",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 20,
+                    "switchportMode": "access",
+                    "accessVlan": 20,
+                    "connectedTo": "eng1-eth0"
+                },
+                {
+                    "id": "sw1-fa3",
+                    "name": "FastEthernet0/3",
+                    "macAddress": "AA:00:00:00:00:03",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 20,
+                    "switchportMode": "access",
+                    "accessVlan": 20,
+                    "connectedTo": "eng2-eth0"
+                },
+                {
+                    "id": "sw1-fa4",
+                    "name": "FastEthernet0/4",
+                    "macAddress": "AA:00:00:00:00:04",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1
+                },
+                {
+                    "id": "sw1-fa5",
+                    "name": "FastEthernet0/5",
+                    "macAddress": "AA:00:00:00:00:05",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1
+                },
+                {
+                    "id": "sw1-fa6",
+                    "name": "FastEthernet0/6",
+                    "macAddress": "AA:00:00:00:00:06",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1
+                },
+                {
+                    "id": "sw1-fa7",
+                    "name": "FastEthernet0/7",
+                    "macAddress": "AA:00:00:00:00:07",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1
+                }
+            ],
+            "position": {
+                "x": 300,
+                "y": 200
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "macTable": [],
+            "vlans": [
+                {
+                    "id": 1,
+                    "name": "default"
+                },
+                {
+                    "id": 10,
+                    "name": "Sales"
+                },
+                {
+                    "id": 20,
+                    "name": "Engineering"
+                }
+            ],
+            "dhcpServers": []
+        }
+    ],
+    "connections": [
+        {
+            "id": "conn-sales1",
+            "sourceDeviceId": "pc-sales-1",
+            "sourceInterfaceId": "sales1-eth0",
+            "targetDeviceId": "switch-1",
+            "targetInterfaceId": "sw1-fa0",
+            "isUp": true,
+            "bandwidth": 100,
+            "latency": 1,
+            "packetLoss": 0
+        },
+        {
+            "id": "conn-sales2",
+            "sourceDeviceId": "pc-sales-2",
+            "sourceInterfaceId": "sales2-eth0",
+            "targetDeviceId": "switch-1",
+            "targetInterfaceId": "sw1-fa1",
+            "isUp": true,
+            "bandwidth": 100,
+            "latency": 1,
+            "packetLoss": 0
+        },
+        {
+            "id": "conn-eng1",
+            "sourceDeviceId": "pc-eng-1",
+            "sourceInterfaceId": "eng1-eth0",
+            "targetDeviceId": "switch-1",
+            "targetInterfaceId": "sw1-fa2",
+            "isUp": true,
+            "bandwidth": 100,
+            "latency": 1,
+            "packetLoss": 0
+        },
+        {
+            "id": "conn-eng2",
+            "sourceDeviceId": "pc-eng-2",
+            "sourceInterfaceId": "eng2-eth0",
+            "targetDeviceId": "switch-1",
+            "targetInterfaceId": "sw1-fa3",
+            "isUp": true,
+            "bandwidth": 100,
+            "latency": 1,
+            "packetLoss": 0
+        }
+    ]
+}

@@ -1,0 +1,483 @@
+{
+    "name": "Trunk Links Between Switches",
+    "description": "Two switches connected via a trunk link, with multiple VLANs spanning both switches. Demonstrates 802.1Q trunk configuration.",
+    "devices": [
+        {
+            "id": "pc-vlan10-sw1",
+            "type": "pc",
+            "name": "VLAN10-SW1-PC",
+            "hostname": "v10-sw1-pc",
+            "interfaces": [
+                {
+                    "id": "v10sw1pc-eth0",
+                    "name": "eth0",
+                    "macAddress": "00:10:01:00:00:01",
+                    "ipAddress": "10.10.10.10",
+                    "subnetMask": "255.255.255.0",
+                    "gateway": "10.10.10.1",
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 10,
+                    "connectedTo": "sw1-fa0"
+                }
+            ],
+            "position": {
+                "x": 50,
+                "y": 100
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "dnsServers": [
+                "8.8.8.8"
+            ],
+            "dhcpServers": []
+        },
+        {
+            "id": "pc-vlan20-sw1",
+            "type": "pc",
+            "name": "VLAN20-SW1-PC",
+            "hostname": "v20-sw1-pc",
+            "interfaces": [
+                {
+                    "id": "v20sw1pc-eth0",
+                    "name": "eth0",
+                    "macAddress": "00:20:01:00:00:01",
+                    "ipAddress": "10.20.20.10",
+                    "subnetMask": "255.255.255.0",
+                    "gateway": "10.20.20.1",
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 20,
+                    "connectedTo": "sw1-fa1"
+                }
+            ],
+            "position": {
+                "x": 50,
+                "y": 300
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "dnsServers": [
+                "8.8.8.8"
+            ],
+            "dhcpServers": []
+        },
+        {
+            "id": "pc-vlan10-sw2",
+            "type": "pc",
+            "name": "VLAN10-SW2-PC",
+            "hostname": "v10-sw2-pc",
+            "interfaces": [
+                {
+                    "id": "v10sw2pc-eth0",
+                    "name": "eth0",
+                    "macAddress": "00:10:02:00:00:01",
+                    "ipAddress": "10.10.10.20",
+                    "subnetMask": "255.255.255.0",
+                    "gateway": "10.10.10.1",
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 10,
+                    "connectedTo": "sw2-fa0"
+                }
+            ],
+            "position": {
+                "x": 550,
+                "y": 100
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "dnsServers": [
+                "8.8.8.8"
+            ],
+            "dhcpServers": []
+        },
+        {
+            "id": "pc-vlan20-sw2",
+            "type": "pc",
+            "name": "VLAN20-SW2-PC",
+            "hostname": "v20-sw2-pc",
+            "interfaces": [
+                {
+                    "id": "v20sw2pc-eth0",
+                    "name": "eth0",
+                    "macAddress": "00:20:02:00:00:01",
+                    "ipAddress": "10.20.20.20",
+                    "subnetMask": "255.255.255.0",
+                    "gateway": "10.20.20.1",
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 20,
+                    "connectedTo": "sw2-fa1"
+                }
+            ],
+            "position": {
+                "x": 550,
+                "y": 300
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "dnsServers": [
+                "8.8.8.8"
+            ],
+            "dhcpServers": []
+        },
+        {
+            "id": "switch-1",
+            "type": "switch",
+            "name": "Switch1",
+            "hostname": "sw1",
+            "interfaces": [
+                {
+                    "id": "sw1-fa0",
+                    "name": "FastEthernet0/0",
+                    "macAddress": "AA:01:00:00:00:00",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 10,
+                    "switchportMode": "access",
+                    "accessVlan": 10,
+                    "connectedTo": "v10sw1pc-eth0"
+                },
+                {
+                    "id": "sw1-fa1",
+                    "name": "FastEthernet0/1",
+                    "macAddress": "AA:01:00:00:00:01",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 20,
+                    "switchportMode": "access",
+                    "accessVlan": 20,
+                    "connectedTo": "v20sw1pc-eth0"
+                },
+                {
+                    "id": "sw1-gi0",
+                    "name": "GigabitEthernet0/0",
+                    "macAddress": "AA:01:00:00:00:10",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "switchportMode": "trunk",
+                    "trunkNativeVlan": 1,
+                    "trunkAllowedVlans": [
+                        1,
+                        10,
+                        20,
+                        30
+                    ],
+                    "connectedTo": "sw2-gi0"
+                },
+                {
+                    "id": "sw1-fa2",
+                    "name": "FastEthernet0/2",
+                    "macAddress": "AA:01:00:00:00:02",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1
+                },
+                {
+                    "id": "sw1-fa3",
+                    "name": "FastEthernet0/3",
+                    "macAddress": "AA:01:00:00:00:03",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1
+                },
+                {
+                    "id": "sw1-fa4",
+                    "name": "FastEthernet0/4",
+                    "macAddress": "AA:01:00:00:00:04",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1
+                },
+                {
+                    "id": "sw1-fa5",
+                    "name": "FastEthernet0/5",
+                    "macAddress": "AA:01:00:00:00:05",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1
+                },
+                {
+                    "id": "sw1-fa6",
+                    "name": "FastEthernet0/6",
+                    "macAddress": "AA:01:00:00:00:06",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1
+                }
+            ],
+            "position": {
+                "x": 200,
+                "y": 200
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "macTable": [],
+            "vlans": [
+                {
+                    "id": 1,
+                    "name": "default"
+                },
+                {
+                    "id": 10,
+                    "name": "VLAN10"
+                },
+                {
+                    "id": 20,
+                    "name": "VLAN20"
+                },
+                {
+                    "id": 30,
+                    "name": "VLAN30"
+                }
+            ],
+            "dhcpServers": []
+        },
+        {
+            "id": "switch-2",
+            "type": "switch",
+            "name": "Switch2",
+            "hostname": "sw2",
+            "interfaces": [
+                {
+                    "id": "sw2-fa0",
+                    "name": "FastEthernet0/0",
+                    "macAddress": "AA:02:00:00:00:00",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 10,
+                    "switchportMode": "access",
+                    "accessVlan": 10,
+                    "connectedTo": "v10sw2pc-eth0"
+                },
+                {
+                    "id": "sw2-fa1",
+                    "name": "FastEthernet0/1",
+                    "macAddress": "AA:02:00:00:00:01",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 20,
+                    "switchportMode": "access",
+                    "accessVlan": 20,
+                    "connectedTo": "v20sw2pc-eth0"
+                },
+                {
+                    "id": "sw2-gi0",
+                    "name": "GigabitEthernet0/0",
+                    "macAddress": "AA:02:00:00:00:10",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "switchportMode": "trunk",
+                    "trunkNativeVlan": 1,
+                    "trunkAllowedVlans": [
+                        1,
+                        10,
+                        20,
+                        30
+                    ],
+                    "connectedTo": "sw1-gi0"
+                },
+                {
+                    "id": "sw2-fa2",
+                    "name": "FastEthernet0/2",
+                    "macAddress": "AA:02:00:00:00:02",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1
+                },
+                {
+                    "id": "sw2-fa3",
+                    "name": "FastEthernet0/3",
+                    "macAddress": "AA:02:00:00:00:03",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1
+                },
+                {
+                    "id": "sw2-fa4",
+                    "name": "FastEthernet0/4",
+                    "macAddress": "AA:02:00:00:00:04",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1
+                },
+                {
+                    "id": "sw2-fa5",
+                    "name": "FastEthernet0/5",
+                    "macAddress": "AA:02:00:00:00:05",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1
+                },
+                {
+                    "id": "sw2-fa6",
+                    "name": "FastEthernet0/6",
+                    "macAddress": "AA:02:00:00:00:06",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1
+                }
+            ],
+            "position": {
+                "x": 400,
+                "y": 200
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "macTable": [],
+            "vlans": [
+                {
+                    "id": 1,
+                    "name": "default"
+                },
+                {
+                    "id": 10,
+                    "name": "VLAN10"
+                },
+                {
+                    "id": 20,
+                    "name": "VLAN20"
+                },
+                {
+                    "id": 30,
+                    "name": "VLAN30"
+                }
+            ],
+            "dhcpServers": []
+        }
+    ],
+    "connections": [
+        {
+            "id": "conn-v10-sw1",
+            "sourceDeviceId": "pc-vlan10-sw1",
+            "sourceInterfaceId": "v10sw1pc-eth0",
+            "targetDeviceId": "switch-1",
+            "targetInterfaceId": "sw1-fa0",
+            "isUp": true,
+            "bandwidth": 100,
+            "latency": 1,
+            "packetLoss": 0
+        },
+        {
+            "id": "conn-v20-sw1",
+            "sourceDeviceId": "pc-vlan20-sw1",
+            "sourceInterfaceId": "v20sw1pc-eth0",
+            "targetDeviceId": "switch-1",
+            "targetInterfaceId": "sw1-fa1",
+            "isUp": true,
+            "bandwidth": 100,
+            "latency": 1,
+            "packetLoss": 0
+        },
+        {
+            "id": "conn-v10-sw2",
+            "sourceDeviceId": "pc-vlan10-sw2",
+            "sourceInterfaceId": "v10sw2pc-eth0",
+            "targetDeviceId": "switch-2",
+            "targetInterfaceId": "sw2-fa0",
+            "isUp": true,
+            "bandwidth": 100,
+            "latency": 1,
+            "packetLoss": 0
+        },
+        {
+            "id": "conn-v20-sw2",
+            "sourceDeviceId": "pc-vlan20-sw2",
+            "sourceInterfaceId": "v20sw2pc-eth0",
+            "targetDeviceId": "switch-2",
+            "targetInterfaceId": "sw2-fa1",
+            "isUp": true,
+            "bandwidth": 100,
+            "latency": 1,
+            "packetLoss": 0
+        },
+        {
+            "id": "conn-trunk",
+            "sourceDeviceId": "switch-1",
+            "sourceInterfaceId": "sw1-gi0",
+            "targetDeviceId": "switch-2",
+            "targetInterfaceId": "sw2-gi0",
+            "isUp": true,
+            "bandwidth": 1000,
+            "latency": 1,
+            "packetLoss": 0
+        }
+    ]
+}

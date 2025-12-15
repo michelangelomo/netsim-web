@@ -425,6 +425,16 @@ const isPlaceholderMAC = packet.destMAC === '00:00:00:00:00:00';
 
 ## Part 5: Prioritized Task List
 
+### Completed ✅
+1. ✅ **Complete VLAN support** (Phases 1-6)
+   - Access/trunk port modes
+   - 802.1Q VLAN tagging/untagging
+   - VLAN-aware MAC learning
+   - VLAN-aware forwarding
+   - SVI (Switch Virtual Interfaces) for inter-VLAN routing
+   - Trunk link processing
+   - UI for VLAN management
+
 ### Immediate (This Sprint)
 1. ☐ Fix hardcoded ARP interface
 2. ☐ Implement ARP table aging
@@ -435,20 +445,19 @@ const isPlaceholderMAC = packet.destMAC === '00:00:00:00:00:00';
 ### Short-term (Next 2 Sprints)
 6. ☐ Implement firewall rule enforcement
 7. ☐ Implement STP (at least basic loop prevention)
-8. ☐ Complete VLAN support
-9. ☐ Implement TCP handshake
+8. ☐ Implement TCP handshake
 
 ### Medium-term (Next Quarter)
-10. ☐ Implement NAT/PAT
-11. ☐ Implement DHCP DORA sequence
-12. ☐ Add simple routing protocol (RIP)
-13. ☐ Add CDP/LLDP
+9. ☐ Implement NAT/PAT
+10. ☐ Implement DHCP DORA sequence
+11. ☐ Add simple routing protocol (RIP)
+12. ☐ Add CDP/LLDP
 
 ### Long-term (Future)
-14. ☐ IPv6 support
-15. ☐ QoS simulation
-16. ☐ Wireless simulation
-17. ☐ SNMP
+13. ☐ IPv6 support
+14. ☐ QoS simulation
+15. ☐ Wireless simulation
+16. ☐ SNMP
 
 ---
 
@@ -465,4 +474,21 @@ const isPlaceholderMAC = packet.destMAC === '00:00:00:00:00:00';
 ---
 
 *Document generated: December 15, 2025*
-*Version: 1.0*
+*Version: 1.1*
+
+---
+
+## Appendix B: Example Topologies
+
+The `examples/` directory contains pre-built network topologies for learning and testing:
+
+| Example | Description | Concepts |
+|---------|-------------|----------|
+| `simple-two-pcs.json` | Two PCs connected via switch | Basic switching, ARP, ping |
+| `vlan-segmentation.json` | VLAN-based network isolation | VLANs, access ports, L2 segmentation |
+| `inter-vlan-routing.json` | L3 switch with SVIs | SVI, inter-VLAN routing |
+| `trunk-links.json` | Multi-switch with trunks | 802.1Q trunking, VLAN spanning |
+| `multi-router-network.json` | Enterprise with branches | Static routing, DHCP, multi-hop |
+| `dhcp-server.json` | DHCP server configuration | DHCP pools, address assignment |
+
+See `examples/README.md` for detailed documentation on each topology.

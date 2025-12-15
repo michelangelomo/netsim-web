@@ -145,3 +145,90 @@ Clear the MAC address table (switches only).
 ```
 clear mac-address-table
 ```
+
+## VLAN Commands
+
+### vlan
+Create a VLAN (switches only).
+```
+configure terminal
+vlan 10
+name Sales
+exit
+```
+
+### no vlan
+Delete a VLAN.
+```
+configure terminal
+no vlan 10
+```
+
+### show vlan
+Display VLAN information.
+```
+show vlan
+show vlan brief
+```
+
+### switchport mode
+Set interface switchport mode.
+```
+interface FastEthernet0/1
+switchport mode access
+```
+```
+interface GigabitEthernet0/0
+switchport mode trunk
+```
+
+### switchport access vlan
+Assign access port to a VLAN.
+```
+interface FastEthernet0/1
+switchport mode access
+switchport access vlan 10
+```
+
+### switchport trunk native vlan
+Set the native VLAN for a trunk port.
+```
+interface GigabitEthernet0/0
+switchport mode trunk
+switchport trunk native vlan 1
+```
+
+### switchport trunk allowed vlan
+Set allowed VLANs on a trunk port.
+```
+interface GigabitEthernet0/0
+switchport trunk allowed vlan 1,10,20,30
+```
+
+### show interfaces trunk
+Display trunk port information.
+```
+show interfaces trunk
+```
+
+## SVI Commands (Layer 3 Switches)
+
+### interface vlan
+Create and configure an SVI.
+```
+interface vlan 10
+ip address 10.10.10.1 255.255.255.0
+no shutdown
+```
+
+### no interface vlan
+Remove an SVI.
+```
+no interface vlan 10
+```
+
+### show ip interface brief
+Show all interfaces including SVIs.
+```
+show ip interface brief
+```
