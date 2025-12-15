@@ -2,6 +2,11 @@
 
 Welcome to **NetSimWeb** - a web-based network simulator for learning and teaching networking concepts.
 
+<figure markdown>
+  ![Screenshot](assets/images/app.png){ width="800" }
+  <figcaption>NetSimWeb Interface</figcaption>
+</figure>
+
 ## Features
 
 - 🖥️ **Drag & Drop Interface** - Easily add network devices to your topology
