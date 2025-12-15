@@ -686,7 +686,7 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
 
       return {
         ...p,
-        processingStage: 'at-device',
+        processingStage: 'at-device' as const,
         waitingForArp: undefined,
       };
     });
