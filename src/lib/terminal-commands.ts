@@ -1081,10 +1081,43 @@ Type 'help <command>' for detailed usage information.
   },
 
   clear: {
-    description: 'Clear terminal screen',
-    usage: 'clear',
-    execute: () => {
-      return { output: '\x1Bc', success: true }; // ANSI clear screen
+    description: 'Clear terminal screen or tables',
+    usage: 'clear [arp|mac-address-table]',
+    execute: (args, deviceId, store) => {
+      if (args.length === 0) {
+        return { output: '\x1Bc', success: true }; // ANSI clear screen
+      }
+
+      const subCmd = args[0].toLowerCase();
+
+      if (subCmd === 'arp') {
+        if (!deviceId) {
+          return { output: 'Error: No device selected', success: false };
+        }
+        const device = store.getDeviceById(deviceId);
+        if (!device) {
+          return { output: 'Error: Device not found', success: false };
+        }
+        store.updateDevice(deviceId, { arpTable: [] });
+        return { output: 'ARP cache cleared', success: true };
+      }
+
+      if (subCmd === 'mac-address-table') {
+        if (!deviceId) {
+          return { output: 'Error: No device selected', success: false };
+        }
+        const device = store.getDeviceById(deviceId);
+        if (!device) {
+          return { output: 'Error: Device not found', success: false };
+        }
+        if (device.type !== 'switch') {
+          return { output: 'Error: This command is only available on switches', success: false };
+        }
+        store.updateDevice(deviceId, { macTable: [] });
+        return { output: 'MAC address table cleared', success: true };
+      }
+
+      return { output: 'Usage: clear [arp|mac-address-table]', success: false };
     },
   },
 

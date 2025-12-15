@@ -620,14 +620,20 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
   },
 
   stopSimulation: () => {
+    // Clear ARP and MAC tables on simulation stop
     set((state) => ({
       simulation: { ...state.simulation, isRunning: false },
       packets: [],
+      devices: state.devices.map((device) => ({
+        ...device,
+        arpTable: [],
+        macTable: [],
+      })),
     }));
     get().addNotification({
       type: 'info',
       title: 'Simulation Stopped',
-      message: 'Network simulation has been stopped',
+      message: 'Network simulation has been stopped. ARP and MAC tables cleared.',
     });
   },
 
@@ -691,63 +697,10 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
       };
     });
 
-    // ARP/MAC table aging - increment age and remove expired entries
-    const ARP_TIMEOUT = 300; // seconds
-    const MAC_TIMEOUT = 300; // seconds
-
-    const agedDevices = devicesNow.map((device) => {
-      let updated = false;
-      let newArpTable = device.arpTable;
-      let newMacTable = device.macTable;
-
-      // Age ARP table entries
-      if (device.arpTable && device.arpTable.length > 0) {
-        newArpTable = device.arpTable
-          .map((entry) => ({
-            ...entry,
-            age: (entry.age ?? 0) + 1,
-          }))
-          .filter((entry) => {
-            // Keep static entries forever, remove expired dynamic entries
-            if (entry.type === 'static') return true;
-            return (entry.age ?? 0) < ARP_TIMEOUT;
-          });
-        if (newArpTable.length !== device.arpTable.length ||
-          newArpTable.some((e, i) => e.age !== (device.arpTable![i]?.age ?? 0) + 1)) {
-          updated = true;
-        }
-      }
-
-      // Age MAC table entries (for switches)
-      if (device.macTable && device.macTable.length > 0) {
-        newMacTable = device.macTable
-          .map((entry) => ({
-            ...entry,
-            age: (entry.age ?? 0) + 1,
-          }))
-          .filter((entry) => {
-            // Keep static entries forever, remove expired dynamic entries
-            if (entry.type === 'static') return true;
-            return (entry.age ?? 0) < MAC_TIMEOUT;
-          });
-        if (newMacTable.length !== device.macTable.length ||
-          newMacTable.some((e, i) => e.age !== (device.macTable![i]?.age ?? 0) + 1)) {
-          updated = true;
-        }
-      }
-
-      if (updated || newArpTable !== device.arpTable || newMacTable !== device.macTable) {
-        return {
-          ...device,
-          arpTable: newArpTable,
-          macTable: newMacTable,
-        };
-      }
-      return device;
-    });
+    // Note: ARP/MAC table aging is disabled for better UX in a learning simulator.
+    // Tables persist until user runs 'clear arp' or stops simulation.
 
     set((state) => ({
-      devices: agedDevices,
       packets: awakenedPackets,
       simulation: {
         ...state.simulation,

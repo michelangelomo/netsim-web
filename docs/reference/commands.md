@@ -133,3 +133,15 @@ Manage ARP cache.
 arp -a
 arp -d 192.168.1.1
 ```
+
+### clear arp
+Clear the ARP cache on the current device.
+```
+clear arp
+```
+
+### clear mac-address-table
+Clear the MAC address table (switches only).
+```
+clear mac-address-table
+```

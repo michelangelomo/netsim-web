@@ -59,6 +59,8 @@ exit
 | `ping <ip>` | Test connectivity |
 | `traceroute <ip>` | Trace packet path |
 | `clear` | Clear terminal screen |
+| `clear arp` | Clear ARP cache |
+| `clear mac-address-table` | Clear MAC table (switches) |
 
 ## Tips
 
