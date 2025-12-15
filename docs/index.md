@@ -15,6 +15,17 @@ Welcome to **NetSimWeb** - a web-based network simulator for learning and teachi
 - 📊 **Real-time Simulation** - Watch packets flow through your network
 - 🌐 **No Installation Required** - Runs entirely in your browser
 
+## ⚠️ Development Disclaimer
+
+!!! warning "Vibe-Coded Project"
+    This application has been built with a **"vibe-coding"** approach - prioritizing rapid development and experimentation over formal engineering practices. While the simulator is functional and useful for learning, please note:
+    
+    - 🎯 **Contributions Welcome**: We appreciate community contributions and improvements
+    - 🔍 **Limited Review Capacity**: Due to the informal development approach, code reviews may be limited or delayed
+    - 🍴 **Consider Forking**: For significant changes or customizations, consider forking the project to maintain your own version
+    
+    The project is open source under AGPL v3.0, so feel free to adapt it to your needs!
+
 ## Quick Links
 
 <div class="grid cards" markdown>
