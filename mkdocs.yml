@@ -1,6 +1,6 @@
 site_name: NetSimWeb Documentation
 site_description: A web-based network simulator for learning and teaching networking concepts
-site_url: https://michelangelomo.github.io/
+site_url: https://michelangelomo.github.io/netsim-web/
 
 theme:
   name: material
