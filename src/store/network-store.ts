@@ -191,6 +191,13 @@ interface NetworkStore {
   learnMAC: (deviceId: string, macAddress: string, port: string, vlan?: number) => void;
   lookupMAC: (deviceId: string, macAddress: string) => string | null;
 
+  // Actions - VLAN (for switches)
+  addVlan: (deviceId: string, vlan: { id: number; name: string }) => boolean;
+  removeVlan: (deviceId: string, vlanId: number) => boolean;
+  addSvi: (deviceId: string, svi: { vlanId: number; ipAddress?: string; subnetMask?: string; isUp: boolean }) => boolean;
+  removeSvi: (deviceId: string, vlanId: number) => boolean;
+  updateInterface: (deviceId: string, interfaceId: string, updates: Partial<NetworkInterface>) => void;
+
   // Actions - DHCP
   configureDhcpServer: (deviceId: string, interfaceId: string, config: Partial<DhcpServerConfig>) => void;
   requestDhcp: (deviceId: string, interfaceId: string) => Promise<string>;
@@ -239,7 +246,7 @@ function createDevice(type: DeviceType, position: { x: number; y: number }, coun
   const interfaceCount = defaults.interfaces;
 
   for (let i = 0; i < interfaceCount; i++) {
-    interfaces.push({
+    const iface: NetworkInterface = {
       id: uuidv4(),
       name: getInterfaceName(type, i),
       macAddress: generateMacAddress(),
@@ -250,7 +257,15 @@ function createDevice(type: DeviceType, position: { x: number; y: number }, coun
       speed: type === 'switch' ? 100 : 1000,
       duplex: 'full',
       vlan: 1,
-    });
+    };
+
+    // Add VLAN properties for switch interfaces
+    if (type === 'switch') {
+      iface.vlanMode = 'access';
+      iface.accessVlan = 1;
+    }
+
+    interfaces.push(iface);
   }
 
   const device: NetworkDevice = {
@@ -273,6 +288,8 @@ function createDevice(type: DeviceType, position: { x: number; y: number }, coun
   // Add MAC table for switches
   if (type === 'switch') {
     device.macTable = [];
+    device.vlans = [{ id: 1, name: 'default' }];
+    device.sviInterfaces = [];
   }
 
   // Add firewall rules for firewalls
@@ -1165,6 +1182,132 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
     if (isBroadcastMAC(macAddress)) return 'broadcast';
     const entry = device.macTable.find((e) => e.macAddress === macAddress);
     return entry?.port || null;
+  },
+
+  // VLAN Management
+  addVlan: (deviceId, vlan) => {
+    const device = get().getDeviceById(deviceId);
+    if (!device || device.type !== 'switch') return false;
+
+    // Validate VLAN ID (1-4094)
+    if (vlan.id < 1 || vlan.id > 4094) return false;
+
+    // Check if VLAN already exists
+    if (device.vlans?.find((v) => v.id === vlan.id)) return false;
+
+    set((state) => ({
+      devices: state.devices.map((d) => {
+        if (d.id !== deviceId) return d;
+        return {
+          ...d,
+          vlans: [...(d.vlans || []), vlan],
+        };
+      }),
+    }));
+    return true;
+  },
+
+  removeVlan: (deviceId, vlanId) => {
+    const device = get().getDeviceById(deviceId);
+    if (!device || device.type !== 'switch') return false;
+
+    // Cannot remove VLAN 1
+    if (vlanId === 1) return false;
+
+    // Check if VLAN exists
+    if (!device.vlans?.find((v) => v.id === vlanId)) return false;
+
+    set((state) => ({
+      devices: state.devices.map((d) => {
+        if (d.id !== deviceId) return d;
+        return {
+          ...d,
+          vlans: (d.vlans || []).filter((v) => v.id !== vlanId),
+          // Reset any interfaces on this VLAN back to VLAN 1
+          interfaces: d.interfaces.map((iface) => {
+            if (iface.accessVlan === vlanId) {
+              return { ...iface, accessVlan: 1 };
+            }
+            if (iface.allowedVlans?.includes(vlanId)) {
+              return {
+                ...iface,
+                allowedVlans: iface.allowedVlans.filter((v) => v !== vlanId),
+              };
+            }
+            return iface;
+          }),
+          // Remove SVI for this VLAN
+          sviInterfaces: (d.sviInterfaces || []).filter((s) => s.vlanId !== vlanId),
+        };
+      }),
+    }));
+    return true;
+  },
+
+  addSvi: (deviceId, svi) => {
+    const device = get().getDeviceById(deviceId);
+    if (!device || device.type !== 'switch') return false;
+
+    // Check if VLAN exists
+    if (!device.vlans?.find((v) => v.id === svi.vlanId)) return false;
+
+    // Check if SVI already exists for this VLAN
+    if (device.sviInterfaces?.find((s) => s.vlanId === svi.vlanId)) {
+      // Update existing SVI
+      set((state) => ({
+        devices: state.devices.map((d) => {
+          if (d.id !== deviceId) return d;
+          return {
+            ...d,
+            sviInterfaces: (d.sviInterfaces || []).map((s) =>
+              s.vlanId === svi.vlanId ? { ...s, ...svi } : s
+            ),
+          };
+        }),
+      }));
+      return true;
+    }
+
+    set((state) => ({
+      devices: state.devices.map((d) => {
+        if (d.id !== deviceId) return d;
+        return {
+          ...d,
+          sviInterfaces: [...(d.sviInterfaces || []), svi],
+        };
+      }),
+    }));
+    return true;
+  },
+
+  removeSvi: (deviceId, vlanId) => {
+    const device = get().getDeviceById(deviceId);
+    if (!device || device.type !== 'switch') return false;
+
+    set((state) => ({
+      devices: state.devices.map((d) => {
+        if (d.id !== deviceId) return d;
+        return {
+          ...d,
+          sviInterfaces: (d.sviInterfaces || []).filter((s) => s.vlanId !== vlanId),
+        };
+      }),
+    }));
+    return true;
+  },
+
+  updateInterface: (deviceId, interfaceId, updates) => {
+    set((state) => ({
+      devices: state.devices.map((d) => {
+        if (d.id !== deviceId) return d;
+        return {
+          ...d,
+          interfaces: d.interfaces.map((iface) =>
+            iface.id === interfaceId ? { ...iface, ...updates } : iface
+          ),
+        };
+      }),
+    }));
   },
 
   // DHCP

@@ -919,6 +919,8 @@ describe('Network Store', () => {
   // Helper Functions Tests
   // ============================================
   // ARP/MAC Table Aging Tests
+  // NOTE: Automatic aging is DISABLED per user request.
+  // Manual clearing is done via 'clear arp' and 'clear mac-address-table' commands.
   // ============================================
   describe('ARP/MAC Table Aging', () => {
     it('should increment ARP entry age on each tick', () => {
@@ -938,15 +940,15 @@ describe('Network Store', () => {
       // Run a tick
       store.tick();
 
-      // Check that age was incremented
+      // Check that age is NOT incremented (aging disabled)
       const updated = store.getDeviceById(router.id)!;
-      expect(updated.arpTable![0].age).toBe(1);
+      expect(updated.arpTable![0].age).toBe(0);
 
       // Run another tick
       store.tick();
 
       const updated2 = store.getDeviceById(router.id)!;
-      expect(updated2.arpTable![0].age).toBe(2);
+      expect(updated2.arpTable![0].age).toBe(0);
 
       store.stopSimulation();
     });
@@ -966,23 +968,13 @@ describe('Network Store', () => {
 
       store.startSimulation();
 
-      // Run a tick - this should push the first entry over 300 seconds and remove it
+      // Run a tick - entries should NOT be removed (aging disabled)
       store.tick();
 
       const updated = store.getDeviceById(router.id)!;
 
-      // Should have only 2 entries (old dynamic one removed, static one kept)
-      expect(updated.arpTable!.length).toBe(2);
-
-      // Young dynamic entry should still exist
-      const youngEntry = updated.arpTable!.find(e => e.ipAddress === '192.168.1.101');
-      expect(youngEntry).toBeDefined();
-      expect(youngEntry!.age).toBe(11);
-
-      // Static entry should still exist regardless of age
-      const staticEntry = updated.arpTable!.find(e => e.ipAddress === '192.168.1.1');
-      expect(staticEntry).toBeDefined();
-      expect(staticEntry!.type).toBe('static');
+      // All 3 entries should remain (no automatic aging/removal)
+      expect(updated.arpTable!.length).toBe(3);
 
       store.stopSimulation();
     });
@@ -1001,8 +993,9 @@ describe('Network Store', () => {
       store.startSimulation();
       store.tick();
 
+      // Age should NOT be incremented (aging disabled)
       const updated = store.getDeviceById(sw.id)!;
-      expect(updated.macTable![0].age).toBe(1);
+      expect(updated.macTable![0].age).toBe(0);
 
       store.stopSimulation();
     });
@@ -1024,12 +1017,8 @@ describe('Network Store', () => {
 
       const updated = store.getDeviceById(sw.id)!;
 
-      // Should have only 2 entries (old dynamic one removed)
-      expect(updated.macTable!.length).toBe(2);
-
-      // Static entry should still exist
-      const staticEntry = updated.macTable!.find(e => e.macAddress === '02:00:00:00:01:00');
-      expect(staticEntry).toBeDefined();
+      // All 3 entries should remain (no automatic aging/removal)
+      expect(updated.macTable!.length).toBe(3);
 
       store.stopSimulation();
     });

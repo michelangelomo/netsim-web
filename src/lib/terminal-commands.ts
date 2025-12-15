@@ -1,4 +1,4 @@
-import type { NetworkDevice, RouteEntry, DhcpServerConfig } from '@/types/network';
+import type { NetworkDevice, RouteEntry, DhcpServerConfig, VLAN, SVIInterface } from '@/types/network';
 import {
   isValidIP,
   isValidSubnetMask,
@@ -51,6 +51,38 @@ interface NetworkStoreState {
   reverseDNS: (deviceId: string, ip: string) => Promise<string | null>;
   // ARP
   resolveARP: (deviceId: string, targetIP: string) => string | null;
+  // VLAN
+  addVlan: (deviceId: string, vlan: { id: number; name: string }) => boolean;
+  removeVlan: (deviceId: string, vlanId: number) => boolean;
+  addSvi: (deviceId: string, svi: { vlanId: number; ipAddress?: string; subnetMask?: string; isUp: boolean }) => boolean;
+  removeSvi: (deviceId: string, vlanId: number) => boolean;
+  updateInterface: (deviceId: string, interfaceId: string, updates: Partial<NetworkDevice['interfaces'][0]>) => void;
+}
+
+// Terminal state for tracking context (interface config mode, VLAN config mode, etc.)
+interface TerminalContext {
+  currentInterfaceId?: string;
+  currentInterfaceName?: string;
+  currentVlanId?: number;
+  currentSviVlanId?: number; // For "interface vlan X" mode
+}
+
+const terminalContexts: Map<string, TerminalContext> = new Map();
+
+function getContext(deviceId: string): TerminalContext {
+  if (!terminalContexts.has(deviceId)) {
+    terminalContexts.set(deviceId, {});
+  }
+  return terminalContexts.get(deviceId)!;
+}
+
+function setContext(deviceId: string, updates: Partial<TerminalContext>) {
+  const ctx = getContext(deviceId);
+  Object.assign(ctx, updates);
+}
+
+function clearContext(deviceId: string) {
+  terminalContexts.set(deviceId, {});
 }
 
 // Command definitions
@@ -222,7 +254,7 @@ Type 'help <command>' for detailed usage information.
 
   ip: {
     description: 'Show/manipulate routing, devices, policy routing and tunnels',
-    usage: 'ip [addr|route|link] ...',
+    usage: 'ip [addr|route|link|address] ...',
     execute: async (args, deviceId, store) => {
       if (!deviceId) {
         return { output: 'Error: No device selected', success: false };
@@ -234,6 +266,42 @@ Type 'help <command>' for detailed usage information.
       }
 
       const subCommand = args[0];
+      const ctx = getContext(deviceId);
+
+      // Cisco-style: ip address X.X.X.X Y.Y.Y.Y (in interface config mode)
+      if (subCommand === 'address' && args[1] && args[2]) {
+        const ipAddr = args[1];
+        const subnetMask = args[2];
+
+        if (!isValidIP(ipAddr)) {
+          return { output: `Error: Invalid IP address: ${ipAddr}`, success: false };
+        }
+        if (!isValidSubnetMask(subnetMask)) {
+          return { output: `Error: Invalid subnet mask: ${subnetMask}`, success: false };
+        }
+
+        // SVI interface mode
+        if (ctx.currentSviVlanId) {
+          store.addSvi(deviceId, {
+            vlanId: ctx.currentSviVlanId,
+            ipAddress: ipAddr,
+            subnetMask: subnetMask,
+            isUp: true,
+          });
+          return { output: `IP address ${ipAddr} ${subnetMask} configured on VLAN ${ctx.currentSviVlanId}`, success: true };
+        }
+
+        // Regular interface mode
+        if (ctx.currentInterfaceId) {
+          store.configureInterface(deviceId, ctx.currentInterfaceId, {
+            ipAddress: ipAddr,
+            subnetMask: subnetMask,
+          });
+          return { output: `IP address ${ipAddr} ${subnetMask} configured on ${ctx.currentInterfaceName}`, success: true };
+        }
+
+        return { output: 'Error: Not in interface configuration mode. Use "interface <name>" first.', success: false };
+      }
 
       if (subCommand === 'addr' || subCommand === 'address' || subCommand === 'a') {
         // ip addr add
@@ -506,6 +574,275 @@ Type 'help <command>' for detailed usage information.
     },
   },
 
+  // ============ VLAN COMMANDS ============
+
+  vlan: {
+    description: 'Create or enter VLAN configuration mode',
+    usage: 'vlan <1-4094>',
+    execute: (args, deviceId, store) => {
+      if (!deviceId) {
+        return { output: 'Error: No device selected', success: false };
+      }
+
+      const device = store.getDeviceById(deviceId);
+      if (!device) {
+        return { output: 'Error: Device not found', success: false };
+      }
+
+      if (device.type !== 'switch') {
+        return { output: 'Error: VLAN configuration is only available on switches', success: false };
+      }
+
+      const vlanId = parseInt(args[0], 10);
+      if (isNaN(vlanId) || vlanId < 1 || vlanId > 4094) {
+        return { output: 'Error: VLAN ID must be between 1-4094', success: false };
+      }
+
+      // Check if VLAN exists, if not create it
+      const existingVlan = device.vlans?.find((v) => v.id === vlanId);
+      if (!existingVlan) {
+        const success = store.addVlan(deviceId, { id: vlanId, name: `VLAN${vlanId}` });
+        if (!success) {
+          return { output: 'Error: Failed to create VLAN', success: false };
+        }
+      }
+
+      // Set context for subsequent commands (like 'name')
+      setContext(deviceId, { currentVlanId: vlanId });
+
+      return { output: `Configuring VLAN ${vlanId}`, success: true };
+    },
+  },
+
+  name: {
+    description: 'Set VLAN name (in VLAN config mode)',
+    usage: 'name <vlan-name>',
+    execute: (args, deviceId, store) => {
+      if (!deviceId) {
+        return { output: 'Error: No device selected', success: false };
+      }
+
+      const device = store.getDeviceById(deviceId);
+      if (!device) {
+        return { output: 'Error: Device not found', success: false };
+      }
+
+      const ctx = getContext(deviceId);
+      if (!ctx.currentVlanId) {
+        return { output: 'Error: Not in VLAN configuration mode. Use "vlan <id>" first.', success: false };
+      }
+
+      const name = args.join(' ');
+      if (!name) {
+        return { output: 'Error: VLAN name required', success: false };
+      }
+
+      // Update VLAN name
+      store.updateDevice(deviceId, {
+        vlans: device.vlans?.map((v) =>
+          v.id === ctx.currentVlanId ? { ...v, name } : v
+        ),
+      });
+
+      return { output: `VLAN ${ctx.currentVlanId} name set to "${name}"`, success: true };
+    },
+  },
+
+  no: {
+    description: 'Negate or remove configuration',
+    usage: 'no <command>',
+    execute: (args, deviceId, store) => {
+      if (!deviceId) {
+        return { output: 'Error: No device selected', success: false };
+      }
+
+      const device = store.getDeviceById(deviceId);
+      if (!device) {
+        return { output: 'Error: Device not found', success: false };
+      }
+
+      const subCmd = args[0]?.toLowerCase();
+
+      if (subCmd === 'vlan') {
+        if (device.type !== 'switch') {
+          return { output: 'Error: VLAN configuration is only available on switches', success: false };
+        }
+
+        const vlanId = parseInt(args[1], 10);
+        if (isNaN(vlanId)) {
+          return { output: 'Error: Invalid VLAN ID', success: false };
+        }
+
+        if (vlanId === 1) {
+          return { output: 'Error: Cannot remove VLAN 1 (default VLAN)', success: false };
+        }
+
+        const success = store.removeVlan(deviceId, vlanId);
+        if (!success) {
+          return { output: `Error: VLAN ${vlanId} does not exist`, success: false };
+        }
+
+        return { output: `VLAN ${vlanId} removed`, success: true };
+      }
+
+      if (subCmd === 'shutdown') {
+        // Handle no shutdown for interfaces
+        const ctx = getContext(deviceId);
+        if (ctx.currentInterfaceId) {
+          store.updateInterface(deviceId, ctx.currentInterfaceId, { isUp: true });
+          return { output: 'Interface enabled', success: true };
+        }
+        if (ctx.currentSviVlanId) {
+          store.addSvi(deviceId, { vlanId: ctx.currentSviVlanId, isUp: true });
+          return { output: `VLAN ${ctx.currentSviVlanId} interface enabled`, success: true };
+        }
+        return { output: 'Error: Not in interface configuration mode', success: false };
+      }
+
+      return { output: `Unknown command: no ${args.join(' ')}`, success: false };
+    },
+  },
+
+  switchport: {
+    description: 'Configure switchport settings',
+    usage: 'switchport mode access|trunk | switchport access vlan <id> | switchport trunk allowed vlan <ids> | switchport trunk native vlan <id>',
+    execute: (args, deviceId, store) => {
+      if (!deviceId) {
+        return { output: 'Error: No device selected', success: false };
+      }
+
+      const device = store.getDeviceById(deviceId);
+      if (!device) {
+        return { output: 'Error: Device not found', success: false };
+      }
+
+      if (device.type !== 'switch') {
+        return { output: 'Error: Switchport commands are only available on switches', success: false };
+      }
+
+      const ctx = getContext(deviceId);
+      if (!ctx.currentInterfaceId) {
+        return { output: 'Error: Not in interface configuration mode. Use "interface <name>" first.', success: false };
+      }
+
+      const subCmd = args[0]?.toLowerCase();
+
+      if (subCmd === 'mode') {
+        const mode = args[1]?.toLowerCase();
+        if (mode !== 'access' && mode !== 'trunk') {
+          return { output: 'Error: Mode must be "access" or "trunk"', success: false };
+        }
+
+        const updates: Partial<NetworkDevice['interfaces'][0]> = {
+          vlanMode: mode,
+        };
+
+        if (mode === 'trunk') {
+          updates.allowedVlans = device.vlans?.map((v) => v.id) || [1];
+          updates.nativeVlan = 1;
+        }
+
+        store.updateInterface(deviceId, ctx.currentInterfaceId, updates);
+        return { output: `Switchport mode set to ${mode}`, success: true };
+      }
+
+      if (subCmd === 'access') {
+        if (args[1]?.toLowerCase() === 'vlan') {
+          const vlanId = parseInt(args[2], 10);
+          if (isNaN(vlanId)) {
+            return { output: 'Error: Invalid VLAN ID', success: false };
+          }
+
+          // Check if VLAN exists
+          if (!device.vlans?.find((v) => v.id === vlanId)) {
+            return { output: `Error: VLAN ${vlanId} does not exist. Create it first with "vlan ${vlanId}"`, success: false };
+          }
+
+          store.updateInterface(deviceId, ctx.currentInterfaceId, { accessVlan: vlanId });
+          return { output: `Access VLAN set to ${vlanId}`, success: true };
+        }
+      }
+
+      if (subCmd === 'trunk') {
+        if (args[1]?.toLowerCase() === 'allowed' && args[2]?.toLowerCase() === 'vlan') {
+          const vlanList = args[3]?.split(',').map((v) => parseInt(v.trim(), 10)).filter((v) => !isNaN(v));
+          if (!vlanList || vlanList.length === 0) {
+            return { output: 'Error: Invalid VLAN list. Use comma-separated IDs.', success: false };
+          }
+
+          store.updateInterface(deviceId, ctx.currentInterfaceId, { allowedVlans: vlanList });
+          return { output: `Allowed VLANs set to ${vlanList.join(', ')}`, success: true };
+        }
+
+        if (args[1]?.toLowerCase() === 'native' && args[2]?.toLowerCase() === 'vlan') {
+          const nativeVlan = parseInt(args[3], 10);
+          if (isNaN(nativeVlan)) {
+            return { output: 'Error: Invalid native VLAN ID', success: false };
+          }
+
+          store.updateInterface(deviceId, ctx.currentInterfaceId, { nativeVlan });
+          return { output: `Native VLAN set to ${nativeVlan}`, success: true };
+        }
+      }
+
+      return { output: 'Usage: switchport mode access|trunk | switchport access vlan <id> | switchport trunk allowed vlan <ids>', success: false };
+    },
+  },
+
+  interface: {
+    description: 'Enter interface configuration mode',
+    usage: 'interface <name> | interface vlan <id>',
+    execute: (args, deviceId, store) => {
+      if (!deviceId) {
+        return { output: 'Error: No device selected', success: false };
+      }
+
+      const device = store.getDeviceById(deviceId);
+      if (!device) {
+        return { output: 'Error: Device not found', success: false };
+      }
+
+      // Handle "interface vlan X" for SVI
+      if (args[0]?.toLowerCase() === 'vlan') {
+        if (device.type !== 'switch') {
+          return { output: 'Error: VLAN interfaces are only available on switches', success: false };
+        }
+
+        const vlanId = parseInt(args[1], 10);
+        if (isNaN(vlanId)) {
+          return { output: 'Error: Invalid VLAN ID', success: false };
+        }
+
+        // Check if VLAN exists
+        if (!device.vlans?.find((v) => v.id === vlanId)) {
+          return { output: `Error: VLAN ${vlanId} does not exist. Create it first with "vlan ${vlanId}"`, success: false };
+        }
+
+        // Create or enter SVI config mode
+        const existingSvi = device.sviInterfaces?.find((s) => s.vlanId === vlanId);
+        if (!existingSvi) {
+          store.addSvi(deviceId, { vlanId, isUp: false });
+        }
+
+        setContext(deviceId, { currentSviVlanId: vlanId, currentInterfaceId: undefined, currentVlanId: undefined });
+        return { output: `Configuring VLAN ${vlanId} interface`, success: true };
+      }
+
+      // Handle regular interface
+      const ifaceName = args.join(' ');
+      const iface = device.interfaces.find(
+        (i) => i.name.toLowerCase() === ifaceName.toLowerCase()
+      );
+
+      if (!iface) {
+        return { output: `Error: Interface ${ifaceName} not found`, success: false };
+      }
+
+      setContext(deviceId, { currentInterfaceId: iface.id, currentInterfaceName: iface.name, currentSviVlanId: undefined, currentVlanId: undefined });
+      return { output: `Configuring interface ${iface.name}`, success: true };
+    },
+  },
+
   dhclient: {
     description: 'DHCP client - request or release IP address',
     usage: 'dhclient [-r] <interface>',
@@ -693,7 +1030,7 @@ Type 'help <command>' for detailed usage information.
 
   'show': {
     description: 'Show various system information',
-    usage: 'show [running-config|interfaces|ip route|arp]',
+    usage: 'show [running-config|interfaces|ip route|arp|vlan]',
     execute: (args, deviceId, store) => {
       if (!deviceId) {
         return { output: 'Error: No device selected', success: false };
@@ -791,8 +1128,72 @@ Type 'help <command>' for detailed usage information.
         return { output, success: true };
       }
 
+      // VLAN commands
+      if (subCmd === 'vlan' || subCmd === 'vlan brief') {
+        if (device.type !== 'switch') {
+          return { output: 'Error: VLAN information is only available on switches', success: false };
+        }
+
+        const vlans = device.vlans || [];
+        let output = 'VLAN  Name                             Status    Ports\n';
+        output += '----  --------------------------------  --------  --------------------------------\n';
+
+        vlans.forEach((vlan) => {
+          const portsInVlan = device.interfaces
+            .filter((i) => i.vlanMode === 'access' && i.accessVlan === vlan.id)
+            .map((i) => i.name)
+            .join(', ') || '-';
+          output += `${vlan.id.toString().padEnd(6)}${vlan.name.padEnd(34)}active    ${portsInVlan}\n`;
+        });
+
+        return { output, success: true };
+      }
+
+      if (subCmd === 'interfaces switchport') {
+        if (device.type !== 'switch') {
+          return { output: 'Error: Switchport information is only available on switches', success: false };
+        }
+
+        let output = '';
+        device.interfaces.forEach((iface) => {
+          output += `Name: ${iface.name}\n`;
+          output += `Switchport: Enabled\n`;
+          output += `Administrative Mode: ${iface.vlanMode || 'access'}\n`;
+          output += `Operational Mode: ${iface.vlanMode || 'access'}\n`;
+          if (iface.vlanMode === 'access' || !iface.vlanMode) {
+            output += `Access Mode VLAN: ${iface.accessVlan || 1}\n`;
+          }
+          if (iface.vlanMode === 'trunk') {
+            output += `Trunking Native Mode VLAN: ${iface.nativeVlan || 1}\n`;
+            output += `Trunking VLANs Allowed: ${iface.allowedVlans?.join(',') || 'all'}\n`;
+          }
+          output += '\n';
+        });
+
+        return { output: output.trim(), success: true };
+      }
+
+      if (subCmd === 'interfaces trunk') {
+        if (device.type !== 'switch') {
+          return { output: 'Error: Trunk information is only available on switches', success: false };
+        }
+
+        const trunkPorts = device.interfaces.filter((i) => i.vlanMode === 'trunk');
+        if (trunkPorts.length === 0) {
+          return { output: 'No trunk ports configured', success: true };
+        }
+
+        let output = 'Port        Mode     Encapsulation  Status        Native vlan\n';
+        output += '----------  -------  -------------  ------------  -----------\n';
+        trunkPorts.forEach((iface) => {
+          output += `${iface.name.padEnd(12)}on       802.1q         trunking      ${iface.nativeVlan || 1}\n`;
+        });
+
+        return { output, success: true };
+      }
+
       return {
-        output: 'Usage: show [running-config|interfaces|ip route|arp|dhcp leases|dhcp config]',
+        output: 'Usage: show [running-config|interfaces|ip route|arp|dhcp leases|dhcp config|vlan|interfaces switchport]',
         success: false,
       };
     },

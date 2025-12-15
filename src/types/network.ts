@@ -1,6 +1,20 @@
 // Network device types
 export type DeviceType = 'pc' | 'laptop' | 'server' | 'router' | 'switch' | 'hub' | 'firewall' | 'cloud';
 
+// VLAN configuration
+export interface VLAN {
+  id: number;           // 1-4094
+  name: string;         // e.g., "default", "management", "sales"
+}
+
+// SVI (Switch Virtual Interface) for Layer 3 on switches
+export interface SVIInterface {
+  vlanId: number;
+  ipAddress?: string;
+  subnetMask?: string;
+  isUp: boolean;
+}
+
 // Network interface
 export interface NetworkInterface {
   id: string;
@@ -16,6 +30,11 @@ export interface NetworkInterface {
   connectedTo?: string; // Interface ID of connected device
   dhcpEnabled?: boolean; // If true, interface uses DHCP client
   dhcpLeaseExpiry?: number; // Timestamp when DHCP lease expires
+  // VLAN-specific properties (for switches)
+  vlanMode?: 'access' | 'trunk';
+  accessVlan?: number;           // For access ports (default: 1)
+  allowedVlans?: number[];       // For trunk ports (default: all)
+  nativeVlan?: number;           // For trunk ports (default: 1)
 }
 
 // Routing table entry
@@ -127,6 +146,8 @@ export interface NetworkDevice {
   routingTable?: RouteEntry[];
   arpTable?: ArpEntry[];
   macTable?: MacTableEntry[]; // For switches
+  vlans?: VLAN[]; // For switches - configured VLANs
+  sviInterfaces?: SVIInterface[]; // For switches - Layer 3 VLAN interfaces
   dhcpServers?: DhcpServerConfig[]; // For routers/servers (per-interface)
   dnsServer?: DnsServerConfig; // For DNS servers
   firewallRules?: FirewallRule[];
@@ -194,6 +215,9 @@ export interface Packet {
     rst?: boolean;
     psh?: boolean;
   };
+
+  // VLAN tagging (802.1Q)
+  vlanTag?: number;
 
   // Explicit flags for packet processing
   isLocallyGenerated?: boolean; // True if packet was generated at this device (not forwarded)
