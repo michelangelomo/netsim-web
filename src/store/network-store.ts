@@ -922,15 +922,21 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
           return null; // No route to destination
         }
 
-        // Check if destination is reachable from the router
-        // Find which router interface is on the destination's network
+        // Check if destination is reachable from the router/L3 switch
+        // Find which interface (physical or SVI) is on the destination's network
         const routerIfaceToDestNet = gatewayDevice.interfaces.find((i) => {
           if (!i.ipAddress || !i.subnetMask || !i.isUp) return false;
           return isSameNetwork(i.ipAddress, destIP, i.subnetMask);
         });
 
-        if (routerIfaceToDestNet) {
-          // Router has direct connection to destination network
+        // Also check SVIs for Layer 3 switches
+        const sviToDestNet = gatewayDevice.sviInterfaces?.find((s) => {
+          if (!s.ipAddress || !s.subnetMask || !s.isUp) return false;
+          return isSameNetwork(s.ipAddress, destIP, s.subnetMask);
+        });
+
+        if (routerIfaceToDestNet || sviToDestNet) {
+          // Router/L3 switch has direct connection to destination network
           if (areInSameL2Domain(gatewayDevice.id, destDevice.id)) {
             const path = calculatePath(sourceDevice.id, destDevice.id, get().devices, get().connections);
             return path.length > 0 ? { path, hops: path.length - 1 } : null;
@@ -2515,7 +2521,8 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
 
   getDeviceByIP: (ip) => {
     return get().devices.find((d) =>
-      d.interfaces.some((i) => i.ipAddress === ip)
+      d.interfaces.some((i) => i.ipAddress === ip) ||
+      d.sviInterfaces?.some((s) => s.ipAddress === ip)
     );
   },
 

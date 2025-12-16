@@ -806,4 +806,348 @@ describe('Integration Tests - End-to-End Packet Flow', () => {
       expect(targetDevices).not.toContain(pc1.id);
     });
   });
+
+  describe('Inter-VLAN Routing via SVI', () => {
+    it('should route packets between VLANs using SVI', () => {
+      // Create a Layer 3 switch
+      useNetworkStore.getState().addDevice('switch', { x: 200, y: 200 });
+      const sw = useNetworkStore.getState().devices[0];
+
+      // Create two PCs
+      useNetworkStore.getState().addDevice('pc', { x: 100, y: 400 });
+      useNetworkStore.getState().addDevice('pc', { x: 300, y: 400 });
+      const [, pc1, pc2] = useNetworkStore.getState().devices;
+
+      // Add VLANs to switch
+      useNetworkStore.getState().addVlan(sw.id, { id: 10, name: 'VLAN10' });
+      useNetworkStore.getState().addVlan(sw.id, { id: 20, name: 'VLAN20' });
+
+      // Add SVIs
+      useNetworkStore.getState().addSvi(sw.id, {
+        vlanId: 10,
+        ipAddress: '192.168.10.1',
+        subnetMask: '255.255.255.0',
+        isUp: true,
+      });
+      useNetworkStore.getState().addSvi(sw.id, {
+        vlanId: 20,
+        ipAddress: '192.168.20.1',
+        subnetMask: '255.255.255.0',
+        isUp: true,
+      });
+
+      // Configure switch ports
+      const swDev = useNetworkStore.getState().getDeviceById(sw.id)!;
+      useNetworkStore.getState().updateInterface(sw.id, swDev.interfaces[0].id, {
+        vlanMode: 'access',
+        accessVlan: 10,
+      });
+      useNetworkStore.getState().updateInterface(sw.id, swDev.interfaces[1].id, {
+        vlanMode: 'access',
+        accessVlan: 20,
+      });
+
+      // Configure PCs
+      useNetworkStore.getState().configureInterface(pc1.id, pc1.interfaces[0].id, {
+        ipAddress: '192.168.10.2',
+        subnetMask: '255.255.255.0',
+        gateway: '192.168.10.1',
+      });
+      useNetworkStore.getState().configureInterface(pc2.id, pc2.interfaces[0].id, {
+        ipAddress: '192.168.20.2',
+        subnetMask: '255.255.255.0',
+        gateway: '192.168.20.1',
+      });
+
+      // Connect devices
+      useNetworkStore.getState().addConnection(pc1.id, pc1.interfaces[0].id, sw.id, swDev.interfaces[0].id);
+      useNetworkStore.getState().addConnection(pc2.id, pc2.interfaces[0].id, sw.id, swDev.interfaces[1].id);
+
+      // Verify switch has SVI routing table entries
+      const switchDev = useNetworkStore.getState().getDeviceById(sw.id)!;
+      expect(switchDev.sviInterfaces?.length).toBe(2);
+      expect(switchDev.routingTable?.some(r => r.destination === '192.168.10.0')).toBe(true);
+      expect(switchDev.routingTable?.some(r => r.destination === '192.168.20.0')).toBe(true);
+
+      // Get the SVI MACs
+      const svi10 = switchDev.sviInterfaces!.find(s => s.vlanId === 10)!;
+      const svi20 = switchDev.sviInterfaces!.find(s => s.vlanId === 20)!;
+
+      // Pre-populate ARP table on switch (normally would be learned)
+      const pc1Dev = useNetworkStore.getState().getDeviceById(pc1.id)!;
+      const pc2Dev = useNetworkStore.getState().getDeviceById(pc2.id)!;
+
+      useNetworkStore.getState().updateDevice(sw.id, {
+        arpTable: [
+          { ipAddress: '192.168.10.2', macAddress: pc1Dev.interfaces[0].macAddress, interface: 'Vlan10', type: 'dynamic', age: 0 },
+          { ipAddress: '192.168.20.2', macAddress: pc2Dev.interfaces[0].macAddress, interface: 'Vlan20', type: 'dynamic', age: 0 },
+        ],
+      });
+
+      // Pre-populate MAC tables
+      useNetworkStore.getState().updateDevice(sw.id, {
+        macTable: [
+          { macAddress: pc1Dev.interfaces[0].macAddress, port: switchDev.interfaces[0].name, vlan: 10, type: 'dynamic', age: 0 },
+          { macAddress: pc2Dev.interfaces[0].macAddress, port: switchDev.interfaces[1].name, vlan: 20, type: 'dynamic', age: 0 },
+        ],
+      });
+
+      // Simulate ICMP packet from PC1 to PC2 (via switch SVI)
+      // First the packet goes to the SVI MAC (gateway)
+      const icmpPacket: Packet = {
+        id: 'test-icmp',
+        type: 'icmp',
+        sourceMAC: pc1Dev.interfaces[0].macAddress,
+        destMAC: svi10.macAddress, // Destined to gateway (SVI)
+        sourceIP: '192.168.10.2',
+        destIP: '192.168.20.2',
+        ttl: 64,
+        size: 64,
+        icmpType: 8,
+        icmpCode: 0,
+        icmpSeq: 1,
+        currentDeviceId: sw.id, // Already at switch
+        ingressInterface: switchDev.interfaces[0].name,
+        processingStage: 'at-device',
+        progress: 0,
+        path: [pc1.id],
+        currentPathIndex: 1,
+        vlanTag: 10,
+      };
+
+      // Process the packet at switch
+      const connections = useNetworkStore.getState().connections;
+      const mockUpdate = vi.fn();
+      const freshSwitch = useNetworkStore.getState().getDeviceById(sw.id)!;
+
+      const result = processDeviceTick(
+        freshSwitch,
+        icmpPacket,
+        connections,
+        mockUpdate
+      );
+
+      // Should produce a routed packet heading to PC2
+      expect(result.length).toBeGreaterThan(0);
+
+      const routedPacket = result.find(p => p.type === 'icmp' && p.processingStage !== 'dropped');
+      expect(routedPacket).toBeDefined();
+
+      // The routed packet should have:
+      // - sourceMAC = SVI 20 MAC (egress SVI)
+      // - destMAC = PC2 MAC
+      // - VLAN tag stripped (access port)
+      if (routedPacket) {
+        expect(routedPacket.sourceMAC).toBe(svi20.macAddress);
+        expect(routedPacket.destMAC).toBe(pc2Dev.interfaces[0].macAddress);
+        expect(routedPacket.vlanTag).toBeUndefined(); // Access port strips tag
+        expect(routedPacket.ttl).toBe(63); // TTL decremented
+      }
+    });
+
+    it('should generate ARP request when destination MAC unknown', () => {
+      // Create a Layer 3 switch
+      useNetworkStore.getState().addDevice('switch', { x: 200, y: 200 });
+      const sw = useNetworkStore.getState().devices[0];
+
+      // Create two PCs
+      useNetworkStore.getState().addDevice('pc', { x: 100, y: 400 });
+      useNetworkStore.getState().addDevice('pc', { x: 300, y: 400 });
+      const [, pc1, pc2] = useNetworkStore.getState().devices;
+
+      // Add VLANs and SVIs
+      useNetworkStore.getState().addVlan(sw.id, { id: 10, name: 'VLAN10' });
+      useNetworkStore.getState().addVlan(sw.id, { id: 20, name: 'VLAN20' });
+      useNetworkStore.getState().addSvi(sw.id, {
+        vlanId: 10,
+        ipAddress: '192.168.10.1',
+        subnetMask: '255.255.255.0',
+        isUp: true,
+      });
+      useNetworkStore.getState().addSvi(sw.id, {
+        vlanId: 20,
+        ipAddress: '192.168.20.1',
+        subnetMask: '255.255.255.0',
+        isUp: true,
+      });
+
+      // Configure switch ports
+      const swDev = useNetworkStore.getState().getDeviceById(sw.id)!;
+      useNetworkStore.getState().updateInterface(sw.id, swDev.interfaces[0].id, {
+        vlanMode: 'access',
+        accessVlan: 10,
+      });
+      useNetworkStore.getState().updateInterface(sw.id, swDev.interfaces[1].id, {
+        vlanMode: 'access',
+        accessVlan: 20,
+      });
+
+      // Configure PCs
+      useNetworkStore.getState().configureInterface(pc1.id, pc1.interfaces[0].id, {
+        ipAddress: '192.168.10.2',
+        subnetMask: '255.255.255.0',
+        gateway: '192.168.10.1',
+      });
+      useNetworkStore.getState().configureInterface(pc2.id, pc2.interfaces[0].id, {
+        ipAddress: '192.168.20.2',
+        subnetMask: '255.255.255.0',
+        gateway: '192.168.20.1',
+      });
+
+      // Connect devices
+      useNetworkStore.getState().addConnection(pc1.id, pc1.interfaces[0].id, sw.id, swDev.interfaces[0].id);
+      useNetworkStore.getState().addConnection(pc2.id, pc2.interfaces[0].id, sw.id, swDev.interfaces[1].id);
+
+      // Get fresh switch state
+      const switchDev = useNetworkStore.getState().getDeviceById(sw.id)!;
+      const svi10 = switchDev.sviInterfaces!.find(s => s.vlanId === 10)!;
+      const pc1Dev = useNetworkStore.getState().getDeviceById(pc1.id)!;
+
+      // DON'T populate ARP table - switch doesn't know PC2's MAC
+
+      // Simulate ICMP packet from PC1 to PC2
+      const icmpPacket: Packet = {
+        id: 'test-icmp',
+        type: 'icmp',
+        sourceMAC: pc1Dev.interfaces[0].macAddress,
+        destMAC: svi10.macAddress,
+        sourceIP: '192.168.10.2',
+        destIP: '192.168.20.2',
+        ttl: 64,
+        size: 64,
+        icmpType: 8,
+        icmpCode: 0,
+        icmpSeq: 1,
+        currentDeviceId: sw.id,
+        ingressInterface: switchDev.interfaces[0].name,
+        processingStage: 'at-device',
+        progress: 0,
+        path: [pc1.id],
+        currentPathIndex: 1,
+        vlanTag: 10,
+      };
+
+      // Process the packet
+      const connections = useNetworkStore.getState().connections;
+      const mockUpdate = vi.fn();
+      const freshSwitch = useNetworkStore.getState().getDeviceById(sw.id)!;
+
+      const result = processDeviceTick(
+        freshSwitch,
+        icmpPacket,
+        connections,
+        mockUpdate
+      );
+
+      // Should produce ARP request + buffered packet
+      expect(result.length).toBe(2);
+
+      const arpRequest = result.find(p => p.type === 'arp');
+      const bufferedPacket = result.find(p => p.processingStage === 'buffered');
+
+      expect(arpRequest).toBeDefined();
+      expect(bufferedPacket).toBeDefined();
+
+      if (arpRequest) {
+        expect(arpRequest.destMAC).toBe('FF:FF:FF:FF:FF:FF');
+        expect(arpRequest.destIP).toBe('192.168.20.2');
+        expect(arpRequest.vlanTag).toBe(20); // ARP in egress VLAN
+      }
+
+      if (bufferedPacket) {
+        expect(bufferedPacket.waitingForArp).toBe('192.168.20.2');
+      }
+    });
+
+    it('should learn MAC from ARP reply destined to SVI', () => {
+      // Create a Layer 3 switch
+      useNetworkStore.getState().addDevice('switch', { x: 200, y: 200 });
+      const sw = useNetworkStore.getState().devices[0];
+
+      // Create a PC
+      useNetworkStore.getState().addDevice('pc', { x: 300, y: 400 });
+      const [, pc] = useNetworkStore.getState().devices;
+
+      // Add VLAN and SVI
+      useNetworkStore.getState().addVlan(sw.id, { id: 20, name: 'VLAN20' });
+      useNetworkStore.getState().addSvi(sw.id, {
+        vlanId: 20,
+        ipAddress: '192.168.20.1',
+        subnetMask: '255.255.255.0',
+        isUp: true,
+      });
+
+      // Configure switch port for VLAN 20
+      const swDev = useNetworkStore.getState().getDeviceById(sw.id)!;
+      useNetworkStore.getState().updateInterface(sw.id, swDev.interfaces[0].id, {
+        vlanMode: 'access',
+        accessVlan: 20,
+      });
+
+      // Configure PC
+      useNetworkStore.getState().configureInterface(pc.id, pc.interfaces[0].id, {
+        ipAddress: '192.168.20.2',
+        subnetMask: '255.255.255.0',
+        gateway: '192.168.20.1',
+      });
+
+      // Connect PC to switch
+      useNetworkStore.getState().addConnection(pc.id, pc.interfaces[0].id, sw.id, swDev.interfaces[0].id);
+
+      // Get fresh state
+      const switchDev = useNetworkStore.getState().getDeviceById(sw.id)!;
+      const svi20 = switchDev.sviInterfaces!.find(s => s.vlanId === 20)!;
+      const pcDev = useNetworkStore.getState().getDeviceById(pc.id)!;
+
+      // Verify switch has no ARP entry for PC yet
+      expect(switchDev.arpTable?.find(e => e.ipAddress === '192.168.20.2')).toBeUndefined();
+
+      // Simulate ARP reply from PC to switch SVI
+      const arpReply: Packet = {
+        id: 'test-arp-reply',
+        type: 'arp',
+        sourceMAC: pcDev.interfaces[0].macAddress,
+        destMAC: svi20.macAddress,
+        sourceIP: '192.168.20.2',
+        destIP: '192.168.20.1',
+        ttl: 64,
+        size: 28,
+        payload: {
+          type: 'reply',
+          senderMAC: pcDev.interfaces[0].macAddress,
+          senderIP: '192.168.20.2',
+          targetMAC: svi20.macAddress,
+          targetIP: '192.168.20.1',
+        },
+        currentDeviceId: sw.id,
+        ingressInterface: switchDev.interfaces[0].name,
+        processingStage: 'at-device',
+        progress: 0,
+        path: [pc.id],
+        currentPathIndex: 1,
+        vlanTag: 20,
+      };
+
+      // Process the ARP reply
+      const connections = useNetworkStore.getState().connections;
+      const freshSwitch = useNetworkStore.getState().getDeviceById(sw.id)!;
+
+      const result = processDeviceTick(
+        freshSwitch,
+        arpReply,
+        connections,
+        (id, updates) => useNetworkStore.getState().updateDevice(id, updates)
+      );
+
+      // ARP reply should be consumed (not forwarded)
+      expect(result.length).toBe(0);
+
+      // Verify the switch learned the PC's MAC
+      const updatedSwitch = useNetworkStore.getState().getDeviceById(sw.id)!;
+      const learnedArp = updatedSwitch.arpTable?.find(e => e.ipAddress === '192.168.20.2');
+      expect(learnedArp).toBeDefined();
+      expect(learnedArp?.macAddress).toBe(pcDev.interfaces[0].macAddress);
+      expect(learnedArp?.interface).toBe('Vlan20');
+    });
+  });
 });

@@ -61,15 +61,7 @@
         "y": 220
       },
       "isRunning": true,
-      "arpTable": [
-        {
-          "ipAddress": "192.168.10.2",
-          "macAddress": "2A:0E:D7:95:E3:74",
-          "interface": "GigabitEthernet0/0",
-          "type": "dynamic",
-          "age": 0
-        }
-      ],
+      "arpTable": [],
       "config": {},
       "routingTable": [
         {
@@ -98,7 +90,8 @@
           "leases": [],
           "excludedAddresses": []
         }
-      ]
+      ],
+      "macTable": []
     },
     {
       "id": "e6a86f24-a952-4478-9300-bf47e2690bca",
@@ -117,7 +110,7 @@
           "speed": 100,
           "duplex": "full",
           "vlan": 1,
-          "vlanMode": "trunk",
+          "vlanMode": "access",
           "accessVlan": 1,
           "connectedTo": "ed2fdb3e-3d95-498e-a98f-f8286879b117",
           "nativeVlan": 1,
@@ -243,15 +236,7 @@
       "isRunning": true,
       "arpTable": [],
       "config": {},
-      "macTable": [
-        {
-          "macAddress": "2A:0E:D7:95:E3:74",
-          "port": "FastEthernet0/1",
-          "vlan": 10,
-          "type": "dynamic",
-          "age": 0
-        }
-      ],
+      "macTable": [],
       "vlans": [
         {
           "id": 1,
@@ -266,7 +251,41 @@
           "name": "20"
         }
       ],
-      "sviInterfaces": []
+      "sviInterfaces": [
+        {
+          "vlanId": 10,
+          "ipAddress": "192.168.10.1",
+          "subnetMask": "255.255.255.0",
+          "isUp": true,
+          "macAddress": "C2:16:52:C5:A2:AA"
+        },
+        {
+          "vlanId": 20,
+          "ipAddress": "192.168.20.1",
+          "subnetMask": "255.255.255.0",
+          "isUp": true,
+          "macAddress": "32:AC:53:B7:F3:68"
+        }
+      ],
+      "dhcpServers": [],
+      "routingTable": [
+        {
+          "destination": "192.168.10.0",
+          "netmask": "255.255.255.0",
+          "gateway": "0.0.0.0",
+          "interface": "Vlan10",
+          "metric": 0,
+          "type": "connected"
+        },
+        {
+          "destination": "192.168.20.0",
+          "netmask": "255.255.255.0",
+          "gateway": "0.0.0.0",
+          "interface": "Vlan20",
+          "metric": 0,
+          "type": "connected"
+        }
+      ]
     },
     {
       "id": "f4f2797e-aef9-424a-8b9b-ba6e417a3d62",
@@ -294,7 +313,29 @@
       },
       "isRunning": true,
       "arpTable": [],
-      "config": {}
+      "config": {},
+      "dhcpServers": [],
+      "tcpConnections": [
+        {
+          "id": "e7e65f1e-2790-4641-b214-a822e65f2f36",
+          "localIP": "192.168.10.2",
+          "localPort": 49152,
+          "remoteIP": "192.168.20.2",
+          "remotePort": 23,
+          "state": "SYN_SENT",
+          "startTime": 1765891306661
+        },
+        {
+          "id": "7e2f5263-f330-4cdc-856a-4da4d7f42912",
+          "localIP": "192.168.10.2",
+          "localPort": 49153,
+          "remoteIP": "192.168.20.2",
+          "remotePort": 23,
+          "state": "SYN_SENT",
+          "startTime": 1765891358557
+        }
+      ],
+      "macTable": []
     },
     {
       "id": "64a5719a-eaa3-4680-b9bf-f6e0c03f2e20",
@@ -322,7 +363,9 @@
       },
       "isRunning": true,
       "arpTable": [],
-      "config": {}
+      "config": {},
+      "dhcpServers": [],
+      "macTable": []
     }
   ],
   "connections": [

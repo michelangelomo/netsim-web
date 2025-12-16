@@ -826,7 +826,7 @@ describe('VLAN Feature', () => {
                     destIP: '192.168.10.1',
                     type: 'arp',
                     payload: {
-                        type: 'request',
+                        type: 'REQUEST',
                         senderIP: '192.168.10.100',
                         senderMAC: pc.interfaces[0].macAddress,
                         targetIP: '192.168.10.1',
@@ -844,10 +844,10 @@ describe('VLAN Feature', () => {
 
                 const result = processPacketAtDevice(arpRequest, sw, store);
 
-                // Should get an ARP reply back to PC
+                // Should get an ARP reply back to PC (check for both uppercase and lowercase)
                 const arpReply = result.find(p =>
                     p.type === 'arp' &&
-                    p.payload?.type === 'reply' &&
+                    (p.payload?.type === 'REPLY' || p.payload?.type === 'reply') &&
                     p.targetDeviceId === pc.id
                 );
 

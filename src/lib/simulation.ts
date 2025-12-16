@@ -559,8 +559,9 @@ function processSviPacket(
     // Check if packet is destined to any SVI MAC (for L3 processing)
     const destSvi = device.sviInterfaces.find(s => s.macAddress === packet.destMAC && s.isUp);
 
-    // Handle ARP requests for SVI IPs
-    if (packet.type === 'arp' && packet.payload?.type === 'request') {
+    // Handle ARP requests for SVI IPs (check both uppercase and lowercase for compatibility)
+    const arpPayloadType = (packet.payload?.type as string)?.toUpperCase?.();
+    if (packet.type === 'arp' && arpPayloadType === 'REQUEST') {
         const targetIP = packet.payload.targetIP || packet.destIP;
         const sviForARP = device.sviInterfaces.find(s => s.ipAddress === targetIP && s.isUp);
 
@@ -574,7 +575,7 @@ function processSviPacket(
                 destIP: packet.sourceIP,
                 type: 'arp',
                 payload: {
-                    type: 'reply',
+                    type: 'REPLY',
                     senderMAC: sviForARP.macAddress,
                     senderIP: sviForARP.ipAddress,
                     targetMAC: packet.sourceMAC,
@@ -606,11 +607,12 @@ function processSviPacket(
                 }
             }
 
-            // Try to find connection by source device
-            if (!replyInterface && packet.sourceDeviceId) {
+            // Try to find connection by source device (use sourceDeviceId or lastDeviceId)
+            const lastDevice = packet.sourceDeviceId || packet.lastDeviceId;
+            if (!replyInterface && lastDevice) {
                 const conn = connections.find(c =>
-                    (c.sourceDeviceId === device.id && c.targetDeviceId === packet.sourceDeviceId) ||
-                    (c.targetDeviceId === device.id && c.sourceDeviceId === packet.sourceDeviceId)
+                    (c.sourceDeviceId === device.id && c.targetDeviceId === lastDevice) ||
+                    (c.targetDeviceId === device.id && c.sourceDeviceId === lastDevice)
                 );
                 if (conn) {
                     const ifaceId = conn.sourceDeviceId === device.id ? conn.sourceInterfaceId : conn.targetInterfaceId;
@@ -624,6 +626,8 @@ function processSviPacket(
                     const targetDeviceId = conn.sourceDeviceId === device.id ? conn.targetDeviceId : conn.sourceDeviceId;
                     arpReply.targetDeviceId = targetDeviceId;
                     arpReply.lastDeviceId = device.id;
+                    // Set to on-link so it gets transported to the target device
+                    arpReply.processingStage = 'on-link';
                     return [arpReply];
                 }
             }
@@ -631,6 +635,36 @@ function processSviPacket(
             // If we can't find the source port, return empty (ARP consumed but no reply sent)
             return [];
         }
+    }
+
+    // Handle ARP replies destined to SVI MAC (learn the sender's MAC)
+    if (destSvi && packet.type === 'arp' && arpPayloadType === 'REPLY') {
+        // Learn the sender's MAC in our ARP table
+        const senderIP = packet.payload.senderIP || packet.sourceIP;
+        const senderMAC = packet.payload.senderMAC || packet.sourceMAC;
+
+        if (senderIP && senderMAC) {
+            const arpTable = device.arpTable || [];
+            const existingIndex = arpTable.findIndex((e) => e.ipAddress === senderIP);
+            const sviInterfaceName = `Vlan${frameVlan}`;
+
+            const entry: ArpEntry = {
+                ipAddress: senderIP,
+                macAddress: senderMAC,
+                interface: sviInterfaceName,
+                type: 'dynamic',
+                age: 0,
+            };
+
+            const newTable = existingIndex === -1
+                ? [...arpTable, entry]
+                : arpTable.map((e, i) => i === existingIndex ? entry : e);
+
+            updateDevice(device.id, { arpTable: newTable });
+        }
+
+        // ARP reply consumed, no forwarding needed
+        return [];
     }
 
     // Handle packets destined to SVI MAC (inter-VLAN routing)
@@ -658,9 +692,61 @@ function processSviPacket(
         // Look up destination MAC in ARP table
         const arpEntry = device.arpTable?.find(e => e.ipAddress === destIP);
         if (!arpEntry) {
-            // Would need to ARP for destination - for now just drop
-            // In a real implementation, we'd generate an ARP request
-            return [];
+            // Generate ARP request from egress SVI to resolve destination MAC
+            // Find a port in the egress VLAN to send the ARP request
+            const arpEgressPort = device.interfaces.find(i =>
+                i.isUp && i.connectedTo && portAllowsVlan(i, egressVlanId!)
+            );
+
+            if (!arpEgressPort) {
+                return []; // No port to send ARP
+            }
+
+            // Find the connection for this port
+            const arpConn = connections.find(c =>
+                c.sourceInterfaceId === arpEgressPort.id || c.targetInterfaceId === arpEgressPort.id
+            );
+            if (!arpConn) return [];
+
+            const arpTargetDeviceId = arpConn.sourceDeviceId === device.id
+                ? arpConn.targetDeviceId
+                : arpConn.sourceDeviceId;
+
+            // Create ARP request packet from egress SVI
+            const arpRequest: Packet = {
+                id: uuidv4(),
+                type: 'arp',
+                sourceMAC: egressSvi.macAddress,
+                destMAC: 'FF:FF:FF:FF:FF:FF',
+                sourceIP: egressSvi.ipAddress!,
+                destIP: destIP,
+                ttl: 1,
+                size: 28,
+                payload: {
+                    type: 'REQUEST',
+                    senderMAC: egressSvi.macAddress,
+                    senderIP: egressSvi.ipAddress,
+                    targetMAC: '00:00:00:00:00:00',
+                    targetIP: destIP,
+                },
+                currentDeviceId: device.id,
+                targetDeviceId: arpTargetDeviceId,
+                egressInterface: arpEgressPort.name,
+                processingStage: 'on-link',
+                progress: 0,
+                path: [device.id],
+                currentPathIndex: 0,
+                vlanTag: egressVlanId!,
+            };
+
+            // Buffer the original packet waiting for ARP
+            const bufferedPacket: Packet = {
+                ...packet,
+                waitingForArp: destIP,
+                processingStage: 'buffered',
+            };
+
+            return [arpRequest, bufferedPacket];
         }
 
         // Find egress port for destination MAC in egress VLAN
@@ -686,7 +772,7 @@ function processSviPacket(
             lastDeviceId: device.id,
             vlanTag: egressVlanId!,
             path: [...(packet.path || []), device.id],
-            processingStage: 'at-device',
+            processingStage: 'on-link', // Set to on-link so it gets transported
         };
 
         // TTL expired check

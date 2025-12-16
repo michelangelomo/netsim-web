@@ -215,6 +215,100 @@ describe('Network Store', () => {
       // `sendPing` may temporarily run the simulation to advance packets, but should restore it.
       expect(store.simulation.isRunning).toBe(false);
     });
+
+    it('should complete ping across VLANs via L3 switch (inter-VLAN routing)', { timeout: 15000 }, async () => {
+      const store = useNetworkStore.getState();
+
+      // Create L3 switch and two PCs
+      const sw = store.addDevice('switch', { x: 100, y: 100 });
+      const pc1 = store.addDevice('pc', { x: 0, y: 200 });
+      const pc2 = store.addDevice('pc', { x: 200, y: 200 });
+
+      // Configure VLANs on switch
+      store.addVlan(sw.id, { id: 10, name: 'VLAN10' });
+      store.addVlan(sw.id, { id: 20, name: 'VLAN20' });
+
+      // Configure SVIs (gateway interfaces)
+      store.addSvi(sw.id, {
+        vlanId: 10,
+        ipAddress: '192.168.10.1',
+        subnetMask: '255.255.255.0',
+        isUp: true,
+      });
+      store.addSvi(sw.id, {
+        vlanId: 20,
+        ipAddress: '192.168.20.1',
+        subnetMask: '255.255.255.0',
+        isUp: true,
+      });
+
+      // Configure switch ports for VLANs
+      store.updateInterface(sw.id, sw.interfaces[0].id, { vlanMode: 'access', accessVlan: 10 });
+      store.updateInterface(sw.id, sw.interfaces[1].id, { vlanMode: 'access', accessVlan: 20 });
+
+      // Configure PCs with IPs and gateways
+      store.configureInterface(pc1.id, pc1.interfaces[0].id, {
+        ipAddress: '192.168.10.2',
+        subnetMask: '255.255.255.0',
+        gateway: '192.168.10.1',
+      });
+      store.configureInterface(pc2.id, pc2.interfaces[0].id, {
+        ipAddress: '192.168.20.2',
+        subnetMask: '255.255.255.0',
+        gateway: '192.168.20.1',
+      });
+
+      // Connect PCs to switch
+      store.addConnection(pc1.id, pc1.interfaces[0].id, sw.id, sw.interfaces[0].id);
+      store.addConnection(pc2.id, pc2.interfaces[0].id, sw.id, sw.interfaces[1].id);
+
+      // Ping from PC1 to PC2 (different VLANs)
+      // Set high simulation speed to speed up ARP resolution and packet traversal
+      store.setSimulationSpeed(50);
+      store.startSimulation();
+
+      // Manually send a packet and trace what happens
+      store.sendPacket({
+        type: 'icmp',
+        sourceMAC: pc1.interfaces[0].macAddress,
+        destMAC: '00:00:00:00:00:00',
+        sourceIP: '192.168.10.2',
+        destIP: '192.168.20.2',
+        ttl: 64,
+        size: 64,
+        icmpType: 8,
+        icmpCode: 0,
+        icmpSeq: 0,
+        currentDeviceId: pc1.id,
+      });
+
+      // Run simulation ticks until ICMP reply arrives or timeout
+      // Inter-VLAN routing requires: ARP to gateway, ARP to destination, routing, return path
+      let replyArrived = false;
+      for (let i = 0; i < 50; i++) {
+        useNetworkStore.getState().tick();
+        const state = useNetworkStore.getState();
+
+        // Check if echo reply arrived at PC1
+        const arrivedPacket = state.packets.find(p =>
+          p.type === 'icmp' &&
+          p.sourceIP === '192.168.20.2' &&
+          p.destIP === '192.168.10.2' &&
+          p.processingStage === 'arrived' &&
+          p.currentDeviceId === pc1.id
+        );
+
+        if (arrivedPacket) {
+          replyArrived = true;
+          break;
+        }
+      }
+
+      expect(replyArrived).toBe(true);
+
+      // Stop simulation
+      store.stopSimulation();
+    });
   });
 
   // ============================================
@@ -1047,6 +1141,26 @@ describe('Network Store', () => {
       const found = useNetworkStore.getState().getDeviceByIP('192.168.1.10');
       expect(found).toBeDefined();
       expect(found!.id).toBe(device.id);
+    });
+
+    it('should get device by SVI IP address', () => {
+      const store = useNetworkStore.getState();
+      const sw = store.addDevice('switch', { x: 0, y: 0 });
+
+      // Add VLAN and SVI
+      store.addVlan(sw.id, { id: 10, name: 'VLAN10' });
+      store.addSvi(sw.id, {
+        vlanId: 10,
+        ipAddress: '192.168.10.1',
+        subnetMask: '255.255.255.0',
+        isUp: true,
+      });
+
+      // Should find switch by SVI IP
+      const found = store.getDeviceByIP('192.168.10.1');
+      expect(found).toBeDefined();
+      expect(found!.id).toBe(sw.id);
+      expect(found!.type).toBe('switch');
     });
 
     it('should get connected devices', () => {
