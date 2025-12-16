@@ -12,7 +12,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useNetworkStore } from '@/store/network-store';
-import { executeNetworkCommand } from '@/lib/terminal-commands';
+import { executeNetworkCommand, getCompletions, getCommandNames } from '@/lib/terminal-commands';
 
 describe('Terminal Commands', () => {
     beforeEach(() => {
@@ -1379,6 +1379,123 @@ describe('Terminal Commands', () => {
             const result = await executeNetworkCommand('echo -e "a\na\nb" | uniq', pc.id, store);
 
             expect(result.success).toBe(true);
+        });
+    });
+
+    // =========================================================================
+    // TAB COMPLETION
+    // =========================================================================
+
+    describe('tab completion', () => {
+        describe('getCommandNames', () => {
+            it('should return sorted list of commands', () => {
+                const names = getCommandNames();
+
+                expect(Array.isArray(names)).toBe(true);
+                expect(names.length).toBeGreaterThan(20);
+                expect(names).toContain('ping');
+                expect(names).toContain('ifconfig');
+                expect(names).toContain('help');
+
+                // Should be sorted
+                const sorted = [...names].sort();
+                expect(names).toEqual(sorted);
+            });
+        });
+
+        describe('getCompletions', () => {
+            it('should complete partial command names', () => {
+                const completions = getCompletions('pi');
+
+                expect(completions).toContain('ping');
+            });
+
+            it('should complete "if" to ifconfig', () => {
+                const completions = getCompletions('if');
+
+                expect(completions).toContain('ifconfig');
+            });
+
+            it('should complete "sh" to show and shutdown', () => {
+                const completions = getCompletions('sh');
+
+                expect(completions).toContain('show');
+            });
+
+            it('should return multiple matches for ambiguous input', () => {
+                const completions = getCompletions('s');
+
+                expect(completions.length).toBeGreaterThan(1);
+            });
+
+            it('should complete ip subcommands', () => {
+                const completions = getCompletions('ip a');
+
+                expect(completions).toContain('addr');
+                expect(completions).toContain('address');
+            });
+
+            it('should complete ip addr subcommands', () => {
+                const completions = getCompletions('ip addr a');
+
+                expect(completions).toContain('add');
+            });
+
+            it('should complete show subcommands', () => {
+                const completions = getCompletions('show v');
+
+                expect(completions).toContain('vlan');
+            });
+
+            it('should complete spanning-tree subcommands', () => {
+                const completions = getCompletions('spanning-tree e');
+
+                expect(completions).toContain('enable');
+            });
+
+            it('should complete clear subcommands', () => {
+                const completions = getCompletions('clear a');
+
+                expect(completions).toContain('arp');
+            });
+
+            it('should complete switchport subcommands for switch', () => {
+                const completions = getCompletions('switchport m', 'switch');
+
+                expect(completions).toContain('mode');
+            });
+
+            it('should complete switchport mode subcommands', () => {
+                const completions = getCompletions('switchport mode a', 'switch');
+
+                expect(completions).toContain('access');
+            });
+
+            it('should complete dhcp subcommands', () => {
+                const completions = getCompletions('dhcp s');
+
+                expect(completions).toContain('server');
+            });
+
+            it('should complete no subcommands', () => {
+                const completions = getCompletions('no v');
+
+                expect(completions).toContain('vlan');
+            });
+
+            it('should return empty array for complete commands', () => {
+                const completions = getCompletions('ping 192.168.1.1');
+
+                // No subcommand completions for ping with IP
+                expect(completions).toEqual([]);
+            });
+
+            it('should return empty for empty input', () => {
+                const completions = getCompletions('');
+
+                // All commands match empty string
+                expect(completions.length).toBeGreaterThan(0);
+            });
         });
     });
 });
