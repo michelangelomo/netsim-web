@@ -62,7 +62,7 @@ export default function Home() {
       <Header />
 
       {/* Main content */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className={`flex-1 flex overflow-hidden transition-all duration-300 ${activeTerminalDevice ? 'pb-80' : ''}`}>
         {/* Left sidebar - Device palette */}
         <Sidebar />
 

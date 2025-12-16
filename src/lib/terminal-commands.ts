@@ -1614,7 +1614,7 @@ Type 'help <command>' for detailed usage information.
   telnet: {
     description: 'Open a TCP connection to a remote host',
     usage: 'telnet <host> [port]',
-    execute: (args, deviceId, store) => {
+    execute: async (args, deviceId, store) => {
       if (!deviceId) {
         return { output: 'telnet: No device selected', success: false };
       }
@@ -1630,9 +1630,15 @@ Type 'help <command>' for detailed usage information.
 
       const host = args[0];
       const port = args[1] ? parseInt(args[1], 10) : 23;
+      let destIP = host;
 
+      // Resolve hostname if not an IP address
       if (!isValidIP(host)) {
-        return { output: `telnet: could not resolve ${host}: Name or service not known`, success: false };
+        const resolved = await store.resolveDNS(deviceId, host);
+        if (!resolved) {
+          return { output: `telnet: could not resolve ${host}: Name or service not known`, success: false };
+        }
+        destIP = resolved;
       }
 
       if (isNaN(port) || port < 1 || port > 65535) {
@@ -1640,10 +1646,10 @@ Type 'help <command>' for detailed usage information.
       }
 
       // Initiate TCP connection
-      store.tcpConnect(deviceId, host, port);
+      store.tcpConnect(deviceId, destIP, port);
 
       return {
-        output: `Trying ${host}...\nConnected to ${host}.\nEscape character is '^]'.`,
+        output: `Trying ${destIP}...${host !== destIP ? ` (${host})` : ''}\nConnected to ${destIP}.\nEscape character is '^]'.`,
         success: true
       };
     },
@@ -2609,12 +2615,84 @@ index.html          100%[===================>]   1.00K  --.-KB/s    in 0s
   curl: {
     description: 'Transfer data from or to a server',
     usage: 'curl [-I] url',
-    execute: (args) => {
+    execute: async (args, deviceId, store) => {
       if (args.length === 0) {
         return { output: 'curl: no URL specified', success: false };
       }
+
+      if (!deviceId) {
+        return { output: 'curl: No device selected', success: false };
+      }
+
+      const device = store.getDeviceById(deviceId);
+      if (!device) {
+        return { output: 'curl: Device not found', success: false };
+      }
+
       const headOnly = args.includes('-I');
       const url = args.filter(a => !a.startsWith('-'))[0];
+
+      if (!url) {
+        return { output: 'curl: no URL specified', success: false };
+      }
+
+      // Parse URL
+      let protocol = 'http';
+      let host = url;
+      let port = 80;
+      let path = '/';
+
+      // Extract protocol
+      if (url.startsWith('https://')) {
+        protocol = 'https';
+        host = url.slice(8);
+        port = 443;
+      } else if (url.startsWith('http://')) {
+        host = url.slice(7);
+      }
+
+      // Extract path
+      const pathIndex = host.indexOf('/');
+      if (pathIndex !== -1) {
+        path = host.slice(pathIndex);
+        host = host.slice(0, pathIndex);
+      }
+
+      // Extract port from host
+      const portIndex = host.indexOf(':');
+      if (portIndex !== -1) {
+        port = parseInt(host.slice(portIndex + 1), 10);
+        host = host.slice(0, portIndex);
+      }
+
+      let destIP = host;
+
+      // Resolve hostname if not an IP
+      if (!isValidIP(host)) {
+        const resolved = await store.resolveDNS(deviceId, host);
+        if (!resolved) {
+          return { output: `curl: (6) Could not resolve host: ${host}`, success: false };
+        }
+        destIP = resolved;
+      }
+
+      // Check if the destination device exists and is listening on the port
+      const destDevice = store.getDeviceByIP(destIP);
+      if (!destDevice) {
+        return { output: `curl: (7) Failed to connect to ${host} port ${port}: No route to host`, success: false };
+      }
+
+      // Check if there's a TCP listener on that port
+      const hasListener = destDevice.tcpConnections?.some(
+        conn => conn.state === 'LISTEN' && conn.localPort === port
+      );
+
+      if (!hasListener) {
+        return { output: `curl: (7) Failed to connect to ${host} port ${port}: Connection refused`, success: false };
+      }
+
+      // Initiate TCP connection for the request
+      store.tcpConnect(deviceId, destIP, port);
 
       if (headOnly) {
         return {
@@ -2622,12 +2700,21 @@ index.html          100%[===================>]   1.00K  --.-KB/s    in 0s
 Date: ${new Date().toUTCString()}
 Server: NetSim/1.0
 Content-Type: text/html
-Content-Length: 1024`,
+Content-Length: 1024
+Connection: keep-alive`,
           success: true
         };
       }
       return {
-        output: `<!DOCTYPE html><html><body><h1>NetSim Response</h1><p>Simulated response from ${url}</p></body></html>`,
+        output: `<!DOCTYPE html>
+<html>
+<head><title>NetSim Response</title></head>
+<body>
+<h1>NetSim Web Server</h1>
+<p>Simulated response from ${protocol}://${host}${port !== (protocol === 'https' ? 443 : 80) ? ':' + port : ''}${path}</p>
+<p>Server: ${destDevice.hostname || destDevice.name}</p>
+</body>
+</html>`,
         success: true
       };
     },

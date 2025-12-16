@@ -388,7 +388,7 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
   connectionStart: null,
   simulation: {
     isRunning: false,
-    speed: 1,
+    speed: 2,
     currentTime: 0,
     packets: [],
   },
