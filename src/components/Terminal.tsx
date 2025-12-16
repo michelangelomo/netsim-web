@@ -12,7 +12,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useNetworkStore } from '@/store/network-store';
-import { executeNetworkCommand } from '@/lib/terminal-commands';
+import { executeNetworkCommand, getCompletions } from '@/lib/terminal-commands';
 
 interface TerminalLine {
   type: 'input' | 'output' | 'error' | 'success';
@@ -182,7 +182,38 @@ export function Terminal() {
         }
       } else if (e.key === 'Tab') {
         e.preventDefault();
-        // Tab completion could be implemented here
+        // Tab completion
+        const completions = getCompletions(inputValue, activeDevice?.type);
+
+        if (completions.length === 1) {
+          // Single match - complete it
+          const parts = inputValue.trim().split(/\s+/);
+          parts[parts.length - 1] = completions[0];
+          setInputValue(parts.join(' ') + ' ');
+        } else if (completions.length > 1) {
+          // Multiple matches - show options
+          setLines((prev) => [
+            ...prev,
+            { type: 'input', content: `${getPrompt()}${inputValue}`, timestamp: Date.now() },
+            { type: 'output', content: completions.join('  '), timestamp: Date.now() },
+          ]);
+
+          // Find common prefix and complete to it
+          const commonPrefix = completions.reduce((prefix, word) => {
+            while (!word.startsWith(prefix)) {
+              prefix = prefix.slice(0, -1);
+            }
+            return prefix;
+          }, completions[0]);
+
+          if (commonPrefix.length > 0) {
+            const parts = inputValue.trim().split(/\s+/);
+            if (commonPrefix.length > parts[parts.length - 1].length) {
+              parts[parts.length - 1] = commonPrefix;
+              setInputValue(parts.join(' '));
+            }
+          }
+        }
       } else if (e.key === 'c' && e.ctrlKey) {
         setInputValue('');
         setLines((prev) => [...prev, { type: 'output', content: '^C', timestamp: Date.now() }]);
@@ -191,7 +222,7 @@ export function Terminal() {
         setLines([]);
       }
     },
-    [executeCommand, commandHistory, historyIndex]
+    [executeCommand, commandHistory, historyIndex, inputValue, activeDevice]
   );
 
   // Clear terminal

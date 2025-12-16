@@ -2975,3 +2975,131 @@ export async function executeNetworkCommand(
   // Single command execution
   return executeSingleCommand(processedInput, deviceId, store);
 }
+
+// Export command names for tab completion
+export function getCommandNames(): string[] {
+  return Object.keys(commands).sort();
+}
+
+// Get command completions based on partial input
+export function getCompletions(partial: string, deviceType?: string): string[] {
+  const parts = partial.trim().split(/\s+/);
+  const cmdPart = parts[0].toLowerCase();
+
+  // If we're still typing the first word, complete command names
+  if (parts.length === 1) {
+    return Object.keys(commands)
+      .filter(cmd => cmd.startsWith(cmdPart))
+      .sort();
+  }
+
+  // For subcommands, provide context-aware completions
+  const cmd = cmdPart;
+  const lastPart = parts[parts.length - 1].toLowerCase();
+
+  // IP subcommands
+  if (cmd === 'ip') {
+    const subCommands = ['addr', 'address', 'route', 'link'];
+    if (parts.length === 2) {
+      return subCommands.filter(s => s.startsWith(lastPart));
+    }
+    if (parts[1] === 'addr' || parts[1] === 'address') {
+      const addrSubs = ['add', 'del', 'show'];
+      if (parts.length === 3) {
+        return addrSubs.filter(s => s.startsWith(lastPart));
+      }
+    }
+    if (parts[1] === 'route') {
+      const routeSubs = ['add', 'del', 'show'];
+      if (parts.length === 3) {
+        return routeSubs.filter(s => s.startsWith(lastPart));
+      }
+    }
+    if (parts[1] === 'link') {
+      const linkSubs = ['set', 'show'];
+      if (parts.length === 3) {
+        return linkSubs.filter(s => s.startsWith(lastPart));
+      }
+    }
+  }
+
+  // Show subcommands
+  if (cmd === 'show') {
+    const showSubs = ['vlan', 'running-config', 'interfaces', 'spanning-tree', 'dhcp', 'ip', 'arp', 'mac-address-table', 'stp'];
+    if (parts.length === 2) {
+      return showSubs.filter(s => s.startsWith(lastPart));
+    }
+    if (parts[1] === 'interfaces') {
+      const ifSubs = ['trunk', 'status'];
+      if (parts.length === 3) {
+        return ifSubs.filter(s => s.startsWith(lastPart));
+      }
+    }
+    if (parts[1] === 'dhcp') {
+      const dhcpSubs = ['leases', 'config'];
+      if (parts.length === 3) {
+        return dhcpSubs.filter(s => s.startsWith(lastPart));
+      }
+    }
+  }
+
+  // Switchport subcommands (only for switches)
+  if (cmd === 'switchport' && deviceType === 'switch') {
+    const swSubs = ['mode', 'access', 'trunk'];
+    if (parts.length === 2) {
+      return swSubs.filter(s => s.startsWith(lastPart));
+    }
+    if (parts[1] === 'mode') {
+      const modeSubs = ['access', 'trunk'];
+      if (parts.length === 3) {
+        return modeSubs.filter(s => s.startsWith(lastPart));
+      }
+    }
+    if (parts[1] === 'access' || parts[1] === 'trunk') {
+      const vlanSubs = ['vlan', 'allowed', 'native'];
+      if (parts.length === 3) {
+        return vlanSubs.filter(s => s.startsWith(lastPart));
+      }
+    }
+  }
+
+  // Spanning-tree subcommands
+  if (cmd === 'spanning-tree') {
+    const stpSubs = ['enable', 'disable', 'priority', 'cost', 'port-priority', 'reconverge'];
+    if (parts.length === 2) {
+      return stpSubs.filter(s => s.startsWith(lastPart));
+    }
+  }
+
+  // Clear subcommands
+  if (cmd === 'clear') {
+    const clearSubs = ['arp', 'mac-address-table'];
+    if (parts.length === 2) {
+      return clearSubs.filter(s => s.startsWith(lastPart));
+    }
+  }
+
+  // DHCP subcommands
+  if (cmd === 'dhcp') {
+    const dhcpSubs = ['server', 'pool', 'gateway'];
+    if (parts.length === 2) {
+      return dhcpSubs.filter(s => s.startsWith(lastPart));
+    }
+    if (parts[1] === 'server') {
+      const serverSubs = ['enable', 'disable'];
+      if (parts.length === 3) {
+        return serverSubs.filter(s => s.startsWith(lastPart));
+      }
+    }
+  }
+
+  // No subcommands
+  if (cmd === 'no') {
+    const noSubs = ['vlan', 'shutdown', 'ip'];
+    if (parts.length === 2) {
+      return noSubs.filter(s => s.startsWith(lastPart));
+    }
+  }
+
+  return [];
+}
