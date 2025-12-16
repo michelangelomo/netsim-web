@@ -9,6 +9,7 @@ import type {
     NetworkInterface,
     FirewallRule,
     StpPortConfig,
+    TcpConnection,
 } from '@/types/network';
 import {
     isSameNetwork,
@@ -152,6 +153,285 @@ function isPortLearning(device: NetworkDevice, interfaceId: string): boolean {
     if (!portConfig) return true;
 
     return portConfig.state === 'learning' || portConfig.state === 'forwarding';
+}
+
+// TCP packet processing helper
+// Returns: { responsePackets, updatedConnections } or null if not a TCP packet
+function processTcpPacket(
+    device: NetworkDevice,
+    packet: Packet,
+    updateDevice: (id: string, updates: Partial<NetworkDevice>) => void
+): { responsePackets: Packet[], consumed: boolean } | null {
+    // Only handle TCP packets
+    if (packet.type !== 'tcp' || !packet.tcpFlags) {
+        return null;
+    }
+
+    const tcpConnections = device.tcpConnections || [];
+    const destPort = packet.destPort;
+    const srcPort = packet.sourcePort;
+    const srcIP = packet.sourceIP;
+    const destIP = packet.destIP;
+
+    const responsePackets: Packet[] = [];
+
+    // Find matching connection
+    const existingConn = tcpConnections.find(
+        (c) =>
+            (c.localPort === destPort && c.remotePort === srcPort && c.remoteIP === srcIP) ||
+            (c.state === 'LISTEN' && c.localPort === destPort)
+    );
+
+    // Handle SYN packet (connection request)
+    if (packet.tcpFlags.syn && !packet.tcpFlags.ack) {
+        // Check if we have a listener on this port
+        const listener = tcpConnections.find(
+            (c) => c.localPort === destPort && c.state === 'LISTEN'
+        );
+
+        if (!listener) {
+            // No listener - send RST
+            const rstPacket: Packet = {
+                id: uuidv4(),
+                type: 'tcp',
+                sourceMAC: packet.destMAC,
+                destMAC: packet.sourceMAC,
+                sourceIP: destIP!,
+                destIP: srcIP!,
+                sourcePort: destPort,
+                destPort: srcPort,
+                ttl: 64,
+                size: 40,
+                tcpFlags: { rst: true, ack: true },
+                tcpSeq: 0,
+                tcpAck: (packet.tcpSeq || 0) + 1,
+                currentDeviceId: device.id,
+                processingStage: 'at-device',
+                progress: 0,
+                path: [],
+                currentPathIndex: 0,
+            };
+            responsePackets.push(rstPacket);
+            return { responsePackets, consumed: true };
+        }
+
+        // Create new connection in SYN_RECV state
+        const newConn: TcpConnection = {
+            id: uuidv4(),
+            localIP: destIP!,
+            localPort: destPort!,
+            remoteIP: srcIP!,
+            remotePort: srcPort!,
+            state: 'SYN_RECV',
+            startTime: Date.now(),
+        };
+
+        // Send SYN-ACK
+        const synAckPacket: Packet = {
+            id: uuidv4(),
+            type: 'tcp',
+            sourceMAC: packet.destMAC,
+            destMAC: packet.sourceMAC,
+            sourceIP: destIP!,
+            destIP: srcIP!,
+            sourcePort: destPort,
+            destPort: srcPort,
+            ttl: 64,
+            size: 40,
+            tcpFlags: { syn: true, ack: true },
+            tcpSeq: 1000, // Server's initial sequence number
+            tcpAck: (packet.tcpSeq || 0) + 1,
+            currentDeviceId: device.id,
+            processingStage: 'at-device',
+            progress: 0,
+            path: [],
+            currentPathIndex: 0,
+        };
+
+        responsePackets.push(synAckPacket);
+        updateDevice(device.id, {
+            tcpConnections: [...tcpConnections, newConn],
+        });
+        return { responsePackets, consumed: true };
+    }
+
+    // Handle SYN-ACK (server response to client's SYN)
+    if (packet.tcpFlags.syn && packet.tcpFlags.ack) {
+        // Find our pending connection in SYN_SENT state
+        const pendingConn = tcpConnections.find(
+            (c) =>
+                c.localPort === destPort &&
+                c.remotePort === srcPort &&
+                c.remoteIP === srcIP &&
+                c.state === 'SYN_SENT'
+        );
+
+        if (pendingConn) {
+            // Send ACK and transition to ESTABLISHED
+            const ackPacket: Packet = {
+                id: uuidv4(),
+                type: 'tcp',
+                sourceMAC: packet.destMAC,
+                destMAC: packet.sourceMAC,
+                sourceIP: destIP!,
+                destIP: srcIP!,
+                sourcePort: destPort,
+                destPort: srcPort,
+                ttl: 64,
+                size: 40,
+                tcpFlags: { ack: true },
+                tcpSeq: (packet.tcpAck || 0),
+                tcpAck: (packet.tcpSeq || 0) + 1,
+                currentDeviceId: device.id,
+                processingStage: 'at-device',
+                progress: 0,
+                path: [],
+                currentPathIndex: 0,
+            };
+
+            responsePackets.push(ackPacket);
+            updateDevice(device.id, {
+                tcpConnections: tcpConnections.map((c) =>
+                    c.id === pendingConn.id ? { ...c, state: 'ESTABLISHED' as const } : c
+                ),
+            });
+            return { responsePackets, consumed: true };
+        }
+        return { responsePackets: [], consumed: true };
+    }
+
+    // Handle ACK (completes handshake on server side, or data acknowledgment)
+    if (packet.tcpFlags.ack && !packet.tcpFlags.syn && !packet.tcpFlags.fin && !packet.tcpFlags.rst) {
+        // Find connection in SYN_RECV (server completing handshake)
+        const synRecvConn = tcpConnections.find(
+            (c) =>
+                c.localPort === destPort &&
+                c.remotePort === srcPort &&
+                c.remoteIP === srcIP &&
+                c.state === 'SYN_RECV'
+        );
+
+        if (synRecvConn) {
+            updateDevice(device.id, {
+                tcpConnections: tcpConnections.map((c) =>
+                    c.id === synRecvConn.id ? { ...c, state: 'ESTABLISHED' as const } : c
+                ),
+            });
+        }
+        return { responsePackets: [], consumed: true };
+    }
+
+    // Handle FIN (connection teardown)
+    if (packet.tcpFlags.fin) {
+        const activeConn = tcpConnections.find(
+            (c) =>
+                c.localPort === destPort &&
+                c.remotePort === srcPort &&
+                c.remoteIP === srcIP &&
+                (c.state === 'ESTABLISHED' || c.state === 'FIN_WAIT_1' || c.state === 'FIN_WAIT_2')
+        );
+
+        if (activeConn) {
+            // Send ACK for the FIN
+            const ackPacket: Packet = {
+                id: uuidv4(),
+                type: 'tcp',
+                sourceMAC: packet.destMAC,
+                destMAC: packet.sourceMAC,
+                sourceIP: destIP!,
+                destIP: srcIP!,
+                sourcePort: destPort,
+                destPort: srcPort,
+                ttl: 64,
+                size: 40,
+                tcpFlags: { ack: true },
+                tcpSeq: (packet.tcpAck || 0),
+                tcpAck: (packet.tcpSeq || 0) + 1,
+                currentDeviceId: device.id,
+                processingStage: 'at-device',
+                progress: 0,
+                path: [],
+                currentPathIndex: 0,
+            };
+            responsePackets.push(ackPacket);
+
+            // State transition depends on current state
+            let newState: TcpConnection['state'];
+            if (activeConn.state === 'ESTABLISHED') {
+                newState = 'CLOSE_WAIT';
+            } else if (activeConn.state === 'FIN_WAIT_1') {
+                // Simultaneous close - go to CLOSING
+                newState = 'CLOSING';
+            } else {
+                // FIN_WAIT_2 -> TIME_WAIT
+                newState = 'TIME_WAIT';
+            }
+
+            updateDevice(device.id, {
+                tcpConnections: tcpConnections.map((c) =>
+                    c.id === activeConn.id ? { ...c, state: newState } : c
+                ),
+            });
+        }
+        return { responsePackets, consumed: true };
+    }
+
+    // Handle RST (connection reset)
+    if (packet.tcpFlags.rst) {
+        const connToReset = tcpConnections.find(
+            (c) =>
+                c.localPort === destPort &&
+                c.remotePort === srcPort &&
+                c.remoteIP === srcIP
+        );
+
+        if (connToReset) {
+            // Remove the connection (or mark as CLOSED)
+            updateDevice(device.id, {
+                tcpConnections: tcpConnections.filter((c) => c.id !== connToReset.id),
+            });
+        }
+        return { responsePackets: [], consumed: true };
+    }
+
+    // PSH/data packets - just acknowledge
+    if (packet.tcpFlags.psh) {
+        const dataConn = tcpConnections.find(
+            (c) =>
+                c.localPort === destPort &&
+                c.remotePort === srcPort &&
+                c.remoteIP === srcIP &&
+                c.state === 'ESTABLISHED'
+        );
+
+        if (dataConn) {
+            // Send ACK
+            const ackPacket: Packet = {
+                id: uuidv4(),
+                type: 'tcp',
+                sourceMAC: packet.destMAC,
+                destMAC: packet.sourceMAC,
+                sourceIP: destIP!,
+                destIP: srcIP!,
+                sourcePort: destPort,
+                destPort: srcPort,
+                ttl: 64,
+                size: 40,
+                tcpFlags: { ack: true },
+                tcpSeq: (packet.tcpAck || 0),
+                tcpAck: (packet.tcpSeq || 0) + (packet.size || 1),
+                currentDeviceId: device.id,
+                processingStage: 'at-device',
+                progress: 0,
+                path: [],
+                currentPathIndex: 0,
+            };
+            responsePackets.push(ackPacket);
+        }
+        return { responsePackets, consumed: true };
+    }
+
+    return { responsePackets: [], consumed: true };
 }
 
 // Process packet at device
@@ -857,6 +1137,15 @@ function processL3Logic(
         const isForMe = device.interfaces.some((i) => i.ipAddress === packet.destIP);
 
         if (isForMe) {
+            // Handle TCP packets
+            if (packet.type === 'tcp') {
+                const tcpResult = processTcpPacket(device, packet, updateDevice);
+                if (tcpResult) {
+                    resultPackets.push(...tcpResult.responsePackets);
+                    return resultPackets;
+                }
+            }
+
             // Consume
             if (packet.type === 'icmp' && packet.icmpType === 8) { // Echo Request
                 // Send Echo Reply

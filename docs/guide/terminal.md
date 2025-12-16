@@ -88,6 +88,43 @@ exit
 | `show stp interface` | Display per-port STP states |
 | `spanning-tree cost <value>` | Set port cost (in interface mode) |
 
+## TCP Connection Commands
+
+| Command | Description |
+|---------|-------------|
+| `netstat` | Display all TCP connections |
+| `netstat -l` | Display listening ports only |
+| `netstat -a` | Display all connections (including listening) |
+| `netstat -t` | Display TCP connections (same as default) |
+| `telnet <ip> [port]` | Open TCP connection to remote host |
+
+### Example: Starting a TCP Listener
+
+```
+# On a server, start listening on port 80
+listen 80
+```
+
+### Example: Connecting via Telnet
+
+```
+# Connect to a server on port 80
+telnet 192.168.1.100 80
+```
+
+### Example: Viewing Connections
+
+```
+# Show all connections
+netstat -a
+
+# Output:
+Active Internet connections
+Proto Recv-Q Send-Q Local Address           Foreign Address         State
+tcp    0      0 *:80                    *:*                     LISTEN
+tcp    0      0 192.168.1.10:49152      192.168.1.100:80        ESTABLISHED
+```
+
 ## Tips
 
 - Use `?` after a command for help

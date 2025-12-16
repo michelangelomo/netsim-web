@@ -1,0 +1,363 @@
+{
+  "devices": [
+    {
+      "id": "e56295d3-e4f0-4ee2-bb12-25bf7efba2eb",
+      "type": "router",
+      "name": "Router1",
+      "hostname": "router1",
+      "interfaces": [
+        {
+          "id": "ed2fdb3e-3d95-498e-a98f-f8286879b117",
+          "name": "GigabitEthernet0/0",
+          "macAddress": "2E:0A:75:44:E6:F3",
+          "ipAddress": "192.168.0.1",
+          "subnetMask": "255.255.255.0",
+          "gateway": "192.168.0.1",
+          "isUp": true,
+          "speed": 1000,
+          "duplex": "full",
+          "vlan": 1,
+          "connectedTo": "b18429db-8f46-4781-ad33-6d8793da666f"
+        },
+        {
+          "id": "1141e965-c473-45a3-bb7d-beb30bbce7ad",
+          "name": "GigabitEthernet0/1",
+          "macAddress": "22:4F:B3:E8:D1:3D",
+          "ipAddress": null,
+          "subnetMask": null,
+          "gateway": null,
+          "isUp": true,
+          "speed": 1000,
+          "duplex": "full",
+          "vlan": 1
+        },
+        {
+          "id": "645bac2f-8e81-4931-a9fb-098848265952",
+          "name": "GigabitEthernet0/2",
+          "macAddress": "CA:9D:75:EA:EC:B9",
+          "ipAddress": null,
+          "subnetMask": null,
+          "gateway": null,
+          "isUp": true,
+          "speed": 1000,
+          "duplex": "full",
+          "vlan": 1
+        },
+        {
+          "id": "a0f9ad83-8831-4072-9d03-30fc1289bed0",
+          "name": "GigabitEthernet0/3",
+          "macAddress": "2A:D0:76:65:5D:DB",
+          "ipAddress": null,
+          "subnetMask": null,
+          "gateway": null,
+          "isUp": true,
+          "speed": 1000,
+          "duplex": "full",
+          "vlan": 1
+        }
+      ],
+      "position": {
+        "x": 220,
+        "y": 220
+      },
+      "isRunning": true,
+      "arpTable": [
+        {
+          "ipAddress": "192.168.10.2",
+          "macAddress": "2A:0E:D7:95:E3:74",
+          "interface": "GigabitEthernet0/0",
+          "type": "dynamic",
+          "age": 0
+        }
+      ],
+      "config": {},
+      "routingTable": [
+        {
+          "destination": "192.168.0.0",
+          "netmask": "255.255.255.0",
+          "gateway": "0.0.0.0",
+          "interface": "GigabitEthernet0/0",
+          "metric": 0,
+          "type": "connected"
+        }
+      ],
+      "dhcpServers": [
+        {
+          "enabled": false,
+          "interfaceId": "ed2fdb3e-3d95-498e-a98f-f8286879b117",
+          "interfaceName": "GigabitEthernet0/0",
+          "poolStart": "192.168.1.100",
+          "poolEnd": "192.168.1.200",
+          "subnetMask": "255.255.255.0",
+          "defaultGateway": "192.168.0.1",
+          "dnsServers": [
+            "8.8.8.8",
+            "8.8.4.4"
+          ],
+          "leaseTime": 86400,
+          "leases": [],
+          "excludedAddresses": []
+        }
+      ]
+    },
+    {
+      "id": "e6a86f24-a952-4478-9300-bf47e2690bca",
+      "type": "switch",
+      "name": "Switch1",
+      "hostname": "switch1",
+      "interfaces": [
+        {
+          "id": "b18429db-8f46-4781-ad33-6d8793da666f",
+          "name": "FastEthernet0/0",
+          "macAddress": "F2:E2:75:D7:41:B0",
+          "ipAddress": "192.168.0.2",
+          "subnetMask": "255.255.255.0",
+          "gateway": "192.168.0.1",
+          "isUp": true,
+          "speed": 100,
+          "duplex": "full",
+          "vlan": 1,
+          "vlanMode": "trunk",
+          "accessVlan": 1,
+          "connectedTo": "ed2fdb3e-3d95-498e-a98f-f8286879b117",
+          "nativeVlan": 1,
+          "allowedVlans": [
+            1,
+            10,
+            20
+          ]
+        },
+        {
+          "id": "579a6326-c3f8-4c02-8f02-a3dbd9a3dc42",
+          "name": "FastEthernet0/1",
+          "macAddress": "62:4A:1A:15:38:33",
+          "ipAddress": "192.168.10.1",
+          "subnetMask": "255.255.255.0",
+          "gateway": "192.168.10.1",
+          "isUp": true,
+          "speed": 100,
+          "duplex": "full",
+          "vlan": 1,
+          "vlanMode": "access",
+          "accessVlan": 10,
+          "nativeVlan": 1,
+          "allowedVlans": [
+            1
+          ],
+          "connectedTo": "6de90486-8905-4fbc-97a5-9a137036c40d"
+        },
+        {
+          "id": "21f32965-db4a-4e6b-b3c9-1659d4a2bc96",
+          "name": "FastEthernet0/2",
+          "macAddress": "32:0D:C9:57:C9:FE",
+          "ipAddress": "192.168.20.1",
+          "subnetMask": "255.255.255.0",
+          "gateway": "192.168.20.1",
+          "isUp": true,
+          "speed": 100,
+          "duplex": "full",
+          "vlan": 1,
+          "vlanMode": "access",
+          "accessVlan": 20,
+          "nativeVlan": 1,
+          "allowedVlans": [
+            1
+          ],
+          "connectedTo": "660bc85a-b923-41b9-b5be-5b46f3af6f4d"
+        },
+        {
+          "id": "0040e01e-8228-4c3b-8e74-9a70ab178d63",
+          "name": "FastEthernet0/3",
+          "macAddress": "2A:0D:C0:DC:B5:D4",
+          "ipAddress": null,
+          "subnetMask": null,
+          "gateway": null,
+          "isUp": false,
+          "speed": 100,
+          "duplex": "full",
+          "vlan": 1,
+          "vlanMode": "access",
+          "accessVlan": 1
+        },
+        {
+          "id": "8c77011b-9749-4882-a437-adcefc1c8e32",
+          "name": "FastEthernet0/4",
+          "macAddress": "AE:C3:1A:90:75:E9",
+          "ipAddress": null,
+          "subnetMask": null,
+          "gateway": null,
+          "isUp": false,
+          "speed": 100,
+          "duplex": "full",
+          "vlan": 1,
+          "vlanMode": "access",
+          "accessVlan": 1
+        },
+        {
+          "id": "12347e03-5d88-4265-a6d2-e866e648e7d5",
+          "name": "FastEthernet0/5",
+          "macAddress": "72:09:35:77:E6:AE",
+          "ipAddress": null,
+          "subnetMask": null,
+          "gateway": null,
+          "isUp": false,
+          "speed": 100,
+          "duplex": "full",
+          "vlan": 1,
+          "vlanMode": "access",
+          "accessVlan": 1
+        },
+        {
+          "id": "4c9f269b-f0c3-4580-8b90-627bcb5306ac",
+          "name": "FastEthernet0/6",
+          "macAddress": "82:F6:1A:FB:8A:CB",
+          "ipAddress": null,
+          "subnetMask": null,
+          "gateway": null,
+          "isUp": false,
+          "speed": 100,
+          "duplex": "full",
+          "vlan": 1,
+          "vlanMode": "access",
+          "accessVlan": 1
+        },
+        {
+          "id": "eaaece8d-1094-4fb2-bd2e-3f5b43932e18",
+          "name": "FastEthernet0/7",
+          "macAddress": "8A:8B:D9:88:5B:02",
+          "ipAddress": null,
+          "subnetMask": null,
+          "gateway": null,
+          "isUp": true,
+          "speed": 100,
+          "duplex": "full",
+          "vlan": 1,
+          "vlanMode": "access",
+          "accessVlan": 1
+        }
+      ],
+      "position": {
+        "x": 220,
+        "y": 480
+      },
+      "isRunning": true,
+      "arpTable": [],
+      "config": {},
+      "macTable": [
+        {
+          "macAddress": "2A:0E:D7:95:E3:74",
+          "port": "FastEthernet0/1",
+          "vlan": 10,
+          "type": "dynamic",
+          "age": 0
+        }
+      ],
+      "vlans": [
+        {
+          "id": 1,
+          "name": "default"
+        },
+        {
+          "id": 10,
+          "name": "10"
+        },
+        {
+          "id": 20,
+          "name": "20"
+        }
+      ],
+      "sviInterfaces": []
+    },
+    {
+      "id": "f4f2797e-aef9-424a-8b9b-ba6e417a3d62",
+      "type": "pc",
+      "name": "PC1",
+      "hostname": "pc1",
+      "interfaces": [
+        {
+          "id": "6de90486-8905-4fbc-97a5-9a137036c40d",
+          "name": "eth0",
+          "macAddress": "2A:0E:D7:95:E3:74",
+          "ipAddress": "192.168.10.2",
+          "subnetMask": "255.255.255.0",
+          "gateway": "192.168.10.1",
+          "isUp": true,
+          "speed": 1000,
+          "duplex": "full",
+          "vlan": 1,
+          "connectedTo": "579a6326-c3f8-4c02-8f02-a3dbd9a3dc42"
+        }
+      ],
+      "position": {
+        "x": 0,
+        "y": 720
+      },
+      "isRunning": true,
+      "arpTable": [],
+      "config": {}
+    },
+    {
+      "id": "64a5719a-eaa3-4680-b9bf-f6e0c03f2e20",
+      "type": "pc",
+      "name": "PC2",
+      "hostname": "pc2",
+      "interfaces": [
+        {
+          "id": "660bc85a-b923-41b9-b5be-5b46f3af6f4d",
+          "name": "eth0",
+          "macAddress": "D2:06:7C:CB:9C:D9",
+          "ipAddress": "192.168.20.2",
+          "subnetMask": "255.255.255.0",
+          "gateway": "192.168.20.1",
+          "isUp": true,
+          "speed": 1000,
+          "duplex": "full",
+          "vlan": 1,
+          "connectedTo": "21f32965-db4a-4e6b-b3c9-1659d4a2bc96"
+        }
+      ],
+      "position": {
+        "x": 440,
+        "y": 720
+      },
+      "isRunning": true,
+      "arpTable": [],
+      "config": {}
+    }
+  ],
+  "connections": [
+    {
+      "id": "70bc925c-267d-4e43-bdc0-ede82f17f174",
+      "sourceDeviceId": "e6a86f24-a952-4478-9300-bf47e2690bca",
+      "sourceInterfaceId": "b18429db-8f46-4781-ad33-6d8793da666f",
+      "targetDeviceId": "e56295d3-e4f0-4ee2-bb12-25bf7efba2eb",
+      "targetInterfaceId": "ed2fdb3e-3d95-498e-a98f-f8286879b117",
+      "isUp": true,
+      "bandwidth": 100,
+      "latency": 1,
+      "packetLoss": 0
+    },
+    {
+      "id": "4eb79cc1-169c-4d8a-b2d7-3abbcf4082eb",
+      "sourceDeviceId": "f4f2797e-aef9-424a-8b9b-ba6e417a3d62",
+      "sourceInterfaceId": "6de90486-8905-4fbc-97a5-9a137036c40d",
+      "targetDeviceId": "e6a86f24-a952-4478-9300-bf47e2690bca",
+      "targetInterfaceId": "579a6326-c3f8-4c02-8f02-a3dbd9a3dc42",
+      "isUp": true,
+      "bandwidth": 100,
+      "latency": 1,
+      "packetLoss": 0
+    },
+    {
+      "id": "bb9117db-ad77-4b3f-ba6f-ffc1371d03fd",
+      "sourceDeviceId": "64a5719a-eaa3-4680-b9bf-f6e0c03f2e20",
+      "sourceInterfaceId": "660bc85a-b923-41b9-b5be-5b46f3af6f4d",
+      "targetDeviceId": "e6a86f24-a952-4478-9300-bf47e2690bca",
+      "targetInterfaceId": "21f32965-db4a-4e6b-b3c9-1659d4a2bc96",
+      "isUp": true,
+      "bandwidth": 100,
+      "latency": 1,
+      "packetLoss": 0
+    }
+  ]
+}

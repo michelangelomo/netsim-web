@@ -20,6 +20,7 @@ import type {
   StpPortState,
   StpPortRole,
   BpduPayload,
+  TcpConnection,
 } from '@/types/network';
 import {
   generateMacAddress,
@@ -246,6 +247,12 @@ interface NetworkStore {
   runStpConvergence: () => void;
   generateStpBpdus: (deviceId: string) => Packet[];
 
+  // Actions - TCP
+  tcpListen: (deviceId: string, port: number) => boolean;
+  tcpConnect: (deviceId: string, destIP: string, destPort: number) => string | null;
+  tcpClose: (deviceId: string, connectionId: string) => void;
+  sendTcpPacket: (deviceId: string, destIP: string, destPort: number, flags: { syn?: boolean; ack?: boolean; fin?: boolean; rst?: boolean; psh?: boolean }, sourcePort?: number) => void;
+
   // Actions - DHCP
   configureDhcpServer: (deviceId: string, interfaceId: string, config: Partial<DhcpServerConfig>) => void;
   requestDhcp: (deviceId: string, interfaceId: string) => Promise<string>;
@@ -361,6 +368,11 @@ function createDevice(type: DeviceType, position: { x: number; y: number }, coun
   // DHCP servers (per-interface) for routers/servers
   if (type === 'router' || type === 'server') {
     device.dhcpServers = [];
+  }
+
+  // TCP connections for devices that can initiate/accept TCP connections
+  if (type === 'pc' || type === 'laptop' || type === 'server' || type === 'router' || type === 'firewall') {
+    device.tcpConnections = [];
   }
 
   return device;
@@ -1806,6 +1818,165 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
     return bpdus;
   },
 
+  // ============================================
+  // TCP Functions
+  // ============================================
+
+  tcpListen: (deviceId, port) => {
+    const device = get().getDeviceById(deviceId);
+    if (!device) return false;
+
+    // Check if already listening on this port
+    const existing = device.tcpConnections?.find(
+      (c) => c.localPort === port && c.state === 'LISTEN'
+    );
+    if (existing) return false;
+
+    // Get local IP from first interface with IP
+    const iface = device.interfaces.find((i) => i.ipAddress);
+    const localIP = iface?.ipAddress || '0.0.0.0';
+
+    const connection: TcpConnection = {
+      id: uuidv4(),
+      localIP,
+      localPort: port,
+      remoteIP: '0.0.0.0',
+      remotePort: 0,
+      state: 'LISTEN',
+      startTime: Date.now(),
+    };
+
+    set((state) => ({
+      devices: state.devices.map((d) => {
+        if (d.id !== deviceId) return d;
+        return {
+          ...d,
+          tcpConnections: [...(d.tcpConnections || []), connection],
+        };
+      }),
+    }));
+
+    return true;
+  },
+
+  tcpConnect: (deviceId, destIP, destPort) => {
+    const device = get().getDeviceById(deviceId);
+    if (!device) return null;
+
+    // Find source interface with IP
+    const sourceIface = device.interfaces.find((i) => i.ipAddress && i.isUp);
+    if (!sourceIface?.ipAddress) return null;
+
+    // Allocate ephemeral port (49152-65535)
+    const usedPorts = new Set(device.tcpConnections?.map((c) => c.localPort) || []);
+    let localPort = 49152;
+    while (usedPorts.has(localPort) && localPort <= 65535) {
+      localPort++;
+    }
+    if (localPort > 65535) return null;
+
+    const connectionId = uuidv4();
+    const connection: TcpConnection = {
+      id: connectionId,
+      localIP: sourceIface.ipAddress,
+      localPort,
+      remoteIP: destIP,
+      remotePort: destPort,
+      state: 'SYN_SENT',
+      startTime: Date.now(),
+    };
+
+    // Add connection to device
+    set((state) => ({
+      devices: state.devices.map((d) => {
+        if (d.id !== deviceId) return d;
+        return {
+          ...d,
+          tcpConnections: [...(d.tcpConnections || []), connection],
+        };
+      }),
+    }));
+
+    // Send SYN packet
+    get().sendTcpPacket(deviceId, destIP, destPort, { syn: true }, localPort);
+
+    return connectionId;
+  },
+
+  tcpClose: (deviceId, connectionId) => {
+    const device = get().getDeviceById(deviceId);
+    if (!device) return;
+
+    const conn = device.tcpConnections?.find((c) => c.id === connectionId);
+    if (!conn || conn.state !== 'ESTABLISHED') return;
+
+    // Transition to FIN_WAIT_1
+    set((state) => ({
+      devices: state.devices.map((d) => {
+        if (d.id !== deviceId) return d;
+        return {
+          ...d,
+          tcpConnections: (d.tcpConnections || []).map((c) => {
+            if (c.id !== connectionId) return c;
+            return { ...c, state: 'FIN_WAIT_1' as const };
+          }),
+        };
+      }),
+    }));
+
+    // Send FIN packet
+    get().sendTcpPacket(deviceId, conn.remoteIP, conn.remotePort, { fin: true, ack: true }, conn.localPort);
+  },
+
+  sendTcpPacket: (deviceId, destIP, destPort, flags, sourcePort) => {
+    const device = get().getDeviceById(deviceId);
+    if (!device) return;
+
+    const sourceIface = device.interfaces.find((i) => i.ipAddress && i.isUp);
+    if (!sourceIface?.ipAddress) return;
+
+    // Determine source port
+    let srcPort = sourcePort;
+    if (!srcPort) {
+      // Find existing connection or allocate ephemeral
+      const conn = device.tcpConnections?.find(
+        (c) => c.remoteIP === destIP && c.remotePort === destPort
+      );
+      srcPort = conn?.localPort || 49152;
+    }
+
+    // Try to find destination MAC from ARP table
+    let destMAC = '00:00:00:00:00:00';
+    const arpEntry = device.arpTable?.find((e) => e.ipAddress === destIP);
+    if (arpEntry) {
+      destMAC = arpEntry.macAddress;
+    } else if (sourceIface.gateway) {
+      // Use gateway MAC if available
+      const gwArp = device.arpTable?.find((e) => e.ipAddress === sourceIface.gateway);
+      if (gwArp) destMAC = gwArp.macAddress;
+    }
+
+    // Generate initial sequence number
+    const seqNum = Math.floor(Math.random() * 0xFFFFFFFF);
+
+    get().sendPacket({
+      type: 'tcp',
+      sourceMAC: sourceIface.macAddress,
+      destMAC,
+      sourceIP: sourceIface.ipAddress,
+      destIP,
+      sourcePort: srcPort,
+      destPort,
+      ttl: 64,
+      size: flags.syn ? 44 : 40, // SYN packets have options
+      tcpFlags: flags,
+      tcpSeq: seqNum,
+      tcpAck: 0,
+      currentDeviceId: deviceId,
+      isLocallyGenerated: true,
+    });
+  },
+
   // DHCP
   configureDhcpServer: (deviceId, interfaceId, config) => {
     const device = get().getDeviceById(deviceId);
@@ -2182,7 +2353,56 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
   },
 
   executeCommand: (deviceId, command) => {
-    // This will be handled by the terminal component
+    // Synchronous command execution for basic commands
+    const device = get().getDeviceById(deviceId);
+    if (!device) return 'Error: Device not found';
+
+    const parts = command.trim().split(/\s+/);
+    const cmd = parts[0];
+    const args = parts.slice(1);
+
+    // Handle netstat
+    if (cmd === 'netstat') {
+      const tcpConnections = device.tcpConnections || [];
+      const showListening = args[0] === '-l';
+      const showAll = args[0] === '-a' || !args[0];
+
+      let output = 'Active Internet connections\n';
+      output += 'Proto Recv-Q Send-Q Local Address           Foreign Address         State\n';
+
+      tcpConnections.forEach((conn) => {
+        if (showListening && conn.state !== 'LISTEN') return;
+        if (!showAll && !showListening && conn.state === 'LISTEN') return;
+
+        const localAddr = `${conn.localIP || '*'}:${conn.localPort}`.padEnd(23);
+        const remoteAddr = conn.state === 'LISTEN'
+          ? '*:*'.padEnd(23)
+          : `${conn.remoteIP || '*'}:${conn.remotePort}`.padEnd(23);
+
+        output += `tcp    0      0 ${localAddr} ${remoteAddr} ${conn.state}\n`;
+      });
+
+      return output;
+    }
+
+    // Handle telnet
+    if (cmd === 'telnet') {
+      if (!args[0]) return 'Usage: telnet <host> [port]';
+
+      const host = args[0];
+      const port = args[1] ? parseInt(args[1], 10) : 23;
+
+      if (isNaN(port) || port < 1 || port > 65535) {
+        return `telnet: invalid port number: ${args[1]}`;
+      }
+
+      // Initiate TCP connection
+      get().tcpConnect(deviceId, host, port);
+
+      return `Trying ${host}...\nConnected to ${host}.\nEscape character is '^]'.`;
+    }
+
+    // For other commands, return empty (handled by terminal component)
     return '';
   },
 

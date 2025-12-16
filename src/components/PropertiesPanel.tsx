@@ -23,6 +23,9 @@ import {
   Layers,
   Plus,
   Globe,
+  Cable,
+  Activity,
+  Radio,
 } from 'lucide-react';
 import { useNetworkStore } from '@/store/network-store';
 import { isValidIP, isValidSubnetMask, cidrToSubnetMask, subnetMaskToCidr } from '@/lib/network-utils';
@@ -47,6 +50,8 @@ export function PropertiesPanel() {
     removeVlan,
     addSvi,
     removeSvi,
+    tcpListen,
+    tcpClose,
   } = useNetworkStore();
 
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
@@ -79,6 +84,10 @@ export function PropertiesPanel() {
     iface: '',
     metric: '1',
   });
+
+  // TCP state
+  const [addingTcpListener, setAddingTcpListener] = useState(false);
+  const [tcpListenPort, setTcpListenPort] = useState('');
 
   // VLAN state
   const [addingVlan, setAddingVlan] = useState(false);
@@ -1200,6 +1209,145 @@ export function PropertiesPanel() {
                   </span>
                 </div>
               ))}
+            </div>
+          </Section>
+        )}
+
+        {/* TCP Connections (for PCs, servers, routers, firewalls) */}
+        {(device.type === 'pc' || device.type === 'laptop' || device.type === 'server' || device.type === 'router' || device.type === 'firewall') && (
+          <Section
+            title="TCP Connections"
+            id="tcp"
+            expanded={expandedSections.has('tcp')}
+            onToggle={() => toggleSection('tcp')}
+            badge={(device.tcpConnections?.length || 0).toString()}
+          >
+            <div className="space-y-2">
+              {/* Listening Ports */}
+              {device.tcpConnections?.filter(c => c.state === 'LISTEN').map((conn, idx) => (
+                <div
+                  key={conn.id || idx}
+                  className="bg-dark-800 rounded-lg p-2 border border-dark-700"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Radio className="w-4 h-4 text-cyan-400" />
+                      <span className="text-sm font-mono text-white">:{conn.localPort}</span>
+                      <span className="text-xs px-1.5 py-0.5 bg-cyan-500/20 text-cyan-400 rounded">
+                        LISTEN
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        if (conn.id) {
+                          tcpClose(device.id, conn.id);
+                        }
+                      }}
+                      className="p-1 hover:bg-dark-600 rounded transition-colors"
+                      title="Stop listening"
+                    >
+                      <X className="w-3.5 h-3.5 text-dark-400 hover:text-rose-400" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {/* Active Connections */}
+              {device.tcpConnections?.filter(c => c.state !== 'LISTEN' && c.state !== 'CLOSED').map((conn, idx) => (
+                <div
+                  key={conn.id || idx}
+                  className="bg-dark-800 rounded-lg p-2 border border-dark-700"
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2">
+                      <Cable className="w-4 h-4 text-emerald-400" />
+                      <span className="text-xs font-mono text-dark-200">
+                        {conn.localIP}:{conn.localPort}
+                      </span>
+                      <span className="text-dark-500">→</span>
+                      <span className="text-xs font-mono text-dark-200">
+                        {conn.remoteIP}:{conn.remotePort}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        if (conn.id) {
+                          tcpClose(device.id, conn.id);
+                        }
+                      }}
+                      className="p-1 hover:bg-dark-600 rounded transition-colors"
+                      title="Reset connection"
+                    >
+                      <X className="w-3.5 h-3.5 text-dark-400 hover:text-rose-400" />
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${conn.state === 'ESTABLISHED' ? 'bg-emerald-500/20 text-emerald-400' :
+                        conn.state === 'SYN_SENT' || conn.state === 'SYN_RECV' ? 'bg-amber-500/20 text-amber-400' :
+                          conn.state === 'TIME_WAIT' || conn.state === 'CLOSE_WAIT' ? 'bg-orange-500/20 text-orange-400' :
+                            'bg-dark-600 text-dark-300'
+                      }`}>
+                      {conn.state}
+                    </span>
+                  </div>
+                </div>
+              ))}
+
+              {/* Add Listener Form */}
+              {addingTcpListener ? (
+                <div className="bg-dark-800 rounded-lg p-3 border border-dark-700 space-y-2">
+                  <div>
+                    <label className="text-xs text-dark-400 mb-1 block">Listen Port</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="65535"
+                      value={tcpListenPort}
+                      onChange={(e) => setTcpListenPort(e.target.value)}
+                      placeholder="80"
+                      className="w-full bg-dark-900 border border-dark-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        const port = parseInt(tcpListenPort, 10);
+                        if (port >= 1 && port <= 65535) {
+                          tcpListen(device.id, port);
+                          setTcpListenPort('');
+                          setAddingTcpListener(false);
+                        } else {
+                          alert('Port must be between 1 and 65535');
+                        }
+                      }}
+                      className="flex-1 px-3 py-1.5 bg-cyan-500 hover:bg-cyan-600 text-white text-xs font-medium rounded transition-colors"
+                    >
+                      Start Listening
+                    </button>
+                    <button
+                      onClick={() => {
+                        setTcpListenPort('');
+                        setAddingTcpListener(false);
+                      }}
+                      className="px-3 py-1.5 bg-dark-700 hover:bg-dark-600 text-dark-300 text-xs font-medium rounded transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setAddingTcpListener(true)}
+                  className="w-full flex items-center justify-center gap-1 px-3 py-2 border border-dashed border-dark-600 rounded-lg text-dark-400 hover:text-white hover:border-dark-500 transition-colors text-xs"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Listen on Port
+                </button>
+              )}
+
+              {(!device.tcpConnections || device.tcpConnections.length === 0) && !addingTcpListener && (
+                <p className="text-xs text-dark-400 text-center py-2">No TCP connections</p>
+              )}
             </div>
           </Section>
         )}

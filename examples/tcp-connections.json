@@ -1,0 +1,308 @@
+{
+    "name": "TCP Connections Demo",
+    "description": "Demonstrates TCP connection handling with a web server listening on port 80 and clients connecting. Shows TCP 3-way handshake and connection states.",
+    "devices": [
+        {
+            "id": "web-server",
+            "type": "server",
+            "name": "WebServer",
+            "hostname": "webserver",
+            "interfaces": [
+                {
+                    "id": "srv-eth0",
+                    "name": "eth0",
+                    "macAddress": "00:AA:BB:CC:DD:01",
+                    "ipAddress": "192.168.1.100",
+                    "subnetMask": "255.255.255.0",
+                    "gateway": "192.168.1.1",
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "sw1-fa0"
+                }
+            ],
+            "position": {
+                "x": 500,
+                "y": 100
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "dnsServers": [
+                "8.8.8.8"
+            ],
+            "dhcpServers": [],
+            "tcpConnections": [
+                {
+                    "id": "tcp-listen-80",
+                    "localIP": "0.0.0.0",
+                    "localPort": 80,
+                    "remoteIP": "0.0.0.0",
+                    "remotePort": 0,
+                    "state": "LISTEN",
+                    "startTime": 0
+                },
+                {
+                    "id": "tcp-listen-443",
+                    "localIP": "0.0.0.0",
+                    "localPort": 443,
+                    "remoteIP": "0.0.0.0",
+                    "remotePort": 0,
+                    "state": "LISTEN",
+                    "startTime": 0
+                }
+            ]
+        },
+        {
+            "id": "client-pc1",
+            "type": "pc",
+            "name": "Client-PC1",
+            "hostname": "client1",
+            "interfaces": [
+                {
+                    "id": "pc1-eth0",
+                    "name": "eth0",
+                    "macAddress": "00:11:22:33:44:01",
+                    "ipAddress": "192.168.1.10",
+                    "subnetMask": "255.255.255.0",
+                    "gateway": "192.168.1.1",
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "sw1-fa1"
+                }
+            ],
+            "position": {
+                "x": 200,
+                "y": 300
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "dnsServers": [
+                "8.8.8.8"
+            ],
+            "dhcpServers": [],
+            "tcpConnections": []
+        },
+        {
+            "id": "client-pc2",
+            "type": "pc",
+            "name": "Client-PC2",
+            "hostname": "client2",
+            "interfaces": [
+                {
+                    "id": "pc2-eth0",
+                    "name": "eth0",
+                    "macAddress": "00:11:22:33:44:02",
+                    "ipAddress": "192.168.1.20",
+                    "subnetMask": "255.255.255.0",
+                    "gateway": "192.168.1.1",
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "sw1-fa2"
+                }
+            ],
+            "position": {
+                "x": 500,
+                "y": 300
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "dnsServers": [
+                "8.8.8.8"
+            ],
+            "dhcpServers": [],
+            "tcpConnections": []
+        },
+        {
+            "id": "client-pc3",
+            "type": "laptop",
+            "name": "Client-Laptop",
+            "hostname": "laptop1",
+            "interfaces": [
+                {
+                    "id": "pc3-eth0",
+                    "name": "eth0",
+                    "macAddress": "00:11:22:33:44:03",
+                    "ipAddress": "192.168.1.30",
+                    "subnetMask": "255.255.255.0",
+                    "gateway": "192.168.1.1",
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "sw1-fa3"
+                }
+            ],
+            "position": {
+                "x": 800,
+                "y": 300
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "dnsServers": [
+                "8.8.8.8"
+            ],
+            "dhcpServers": [],
+            "tcpConnections": []
+        },
+        {
+            "id": "switch-1",
+            "type": "switch",
+            "name": "Switch1",
+            "hostname": "switch1",
+            "interfaces": [
+                {
+                    "id": "sw1-fa0",
+                    "name": "FastEthernet0/0",
+                    "macAddress": "AA:BB:CC:DD:EE:00",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "vlanMode": "access",
+                    "accessVlan": 1,
+                    "connectedTo": "srv-eth0"
+                },
+                {
+                    "id": "sw1-fa1",
+                    "name": "FastEthernet0/1",
+                    "macAddress": "AA:BB:CC:DD:EE:01",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "vlanMode": "access",
+                    "accessVlan": 1,
+                    "connectedTo": "pc1-eth0"
+                },
+                {
+                    "id": "sw1-fa2",
+                    "name": "FastEthernet0/2",
+                    "macAddress": "AA:BB:CC:DD:EE:02",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "vlanMode": "access",
+                    "accessVlan": 1,
+                    "connectedTo": "pc2-eth0"
+                },
+                {
+                    "id": "sw1-fa3",
+                    "name": "FastEthernet0/3",
+                    "macAddress": "AA:BB:CC:DD:EE:03",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "vlanMode": "access",
+                    "accessVlan": 1,
+                    "connectedTo": "pc3-eth0"
+                },
+                {
+                    "id": "sw1-fa4",
+                    "name": "FastEthernet0/4",
+                    "macAddress": "AA:BB:CC:DD:EE:04",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "vlanMode": "access",
+                    "accessVlan": 1
+                }
+            ],
+            "position": {
+                "x": 500,
+                "y": 200
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "macTable": [],
+            "vlans": [
+                {
+                    "id": 1,
+                    "name": "default"
+                }
+            ],
+            "config": {}
+        }
+    ],
+    "connections": [
+        {
+            "id": "conn-srv-sw",
+            "sourceDeviceId": "web-server",
+            "targetDeviceId": "switch-1",
+            "sourceInterfaceId": "srv-eth0",
+            "targetInterfaceId": "sw1-fa0",
+            "isUp": true,
+            "bandwidth": 100,
+            "latency": 1
+        },
+        {
+            "id": "conn-pc1-sw",
+            "sourceDeviceId": "client-pc1",
+            "targetDeviceId": "switch-1",
+            "sourceInterfaceId": "pc1-eth0",
+            "targetInterfaceId": "sw1-fa1",
+            "isUp": true,
+            "bandwidth": 100,
+            "latency": 1
+        },
+        {
+            "id": "conn-pc2-sw",
+            "sourceDeviceId": "client-pc2",
+            "targetDeviceId": "switch-1",
+            "sourceInterfaceId": "pc2-eth0",
+            "targetInterfaceId": "sw1-fa2",
+            "isUp": true,
+            "bandwidth": 100,
+            "latency": 1
+        },
+        {
+            "id": "conn-pc3-sw",
+            "sourceDeviceId": "client-pc3",
+            "targetDeviceId": "switch-1",
+            "sourceInterfaceId": "pc3-eth0",
+            "targetInterfaceId": "sw1-fa3",
+            "isUp": true,
+            "bandwidth": 100,
+            "latency": 1
+        }
+    ],
+    "simulation": {
+        "isRunning": false,
+        "speed": 1,
+        "packets": []
+    },
+    "instructions": [
+        "1. This topology has a web server listening on ports 80 and 443",
+        "2. Open a terminal on any client PC",
+        "3. Run: telnet 192.168.1.100 80",
+        "4. Watch the TCP 3-way handshake (SYN -> SYN-ACK -> ACK)",
+        "5. Use 'netstat' command to view TCP connections",
+        "6. Try 'netstat -l' on the server to see listening ports"
+    ]
+}

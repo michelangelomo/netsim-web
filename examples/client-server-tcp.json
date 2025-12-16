@@ -1,0 +1,330 @@
+{
+    "name": "Client-Server TCP Communication",
+    "description": "Client and server in different networks connected via router. Demonstrates TCP connections across network boundaries.",
+    "devices": [
+        {
+            "id": "app-server",
+            "type": "server",
+            "name": "AppServer",
+            "hostname": "appserver",
+            "interfaces": [
+                {
+                    "id": "app-eth0",
+                    "name": "eth0",
+                    "macAddress": "00:AA:BB:CC:DD:01",
+                    "ipAddress": "10.0.1.100",
+                    "subnetMask": "255.255.255.0",
+                    "gateway": "10.0.1.1",
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "sw-srv-fa0"
+                }
+            ],
+            "position": {
+                "x": 700,
+                "y": 200
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "dnsServers": [
+                "8.8.8.8"
+            ],
+            "dhcpServers": [],
+            "tcpConnections": [
+                {
+                    "id": "tcp-ssh",
+                    "localIP": "0.0.0.0",
+                    "localPort": 22,
+                    "remoteIP": "0.0.0.0",
+                    "remotePort": 0,
+                    "state": "LISTEN",
+                    "startTime": 0
+                },
+                {
+                    "id": "tcp-http",
+                    "localIP": "0.0.0.0",
+                    "localPort": 80,
+                    "remoteIP": "0.0.0.0",
+                    "remotePort": 0,
+                    "state": "LISTEN",
+                    "startTime": 0
+                },
+                {
+                    "id": "tcp-https",
+                    "localIP": "0.0.0.0",
+                    "localPort": 443,
+                    "remoteIP": "0.0.0.0",
+                    "remotePort": 0,
+                    "state": "LISTEN",
+                    "startTime": 0
+                },
+                {
+                    "id": "tcp-mysql",
+                    "localIP": "0.0.0.0",
+                    "localPort": 3306,
+                    "remoteIP": "0.0.0.0",
+                    "remotePort": 0,
+                    "state": "LISTEN",
+                    "startTime": 0
+                }
+            ]
+        },
+        {
+            "id": "client-dev",
+            "type": "pc",
+            "name": "Developer-PC",
+            "hostname": "devpc",
+            "interfaces": [
+                {
+                    "id": "dev-eth0",
+                    "name": "eth0",
+                    "macAddress": "00:11:22:33:44:01",
+                    "ipAddress": "192.168.1.10",
+                    "subnetMask": "255.255.255.0",
+                    "gateway": "192.168.1.1",
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "sw-cli-fa0"
+                }
+            ],
+            "position": {
+                "x": 100,
+                "y": 200
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "dnsServers": [
+                "8.8.8.8"
+            ],
+            "dhcpServers": [],
+            "tcpConnections": []
+        },
+        {
+            "id": "switch-client",
+            "type": "switch",
+            "name": "Client-Switch",
+            "hostname": "sw-client",
+            "interfaces": [
+                {
+                    "id": "sw-cli-fa0",
+                    "name": "FastEthernet0/0",
+                    "macAddress": "CC:CC:CC:00:00:00",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "vlanMode": "access",
+                    "accessVlan": 1,
+                    "connectedTo": "dev-eth0"
+                },
+                {
+                    "id": "sw-cli-fa1",
+                    "name": "FastEthernet0/1",
+                    "macAddress": "CC:CC:CC:00:00:01",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "vlanMode": "access",
+                    "accessVlan": 1,
+                    "connectedTo": "rtr-g0"
+                }
+            ],
+            "position": {
+                "x": 200,
+                "y": 200
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "macTable": [],
+            "vlans": [
+                {
+                    "id": 1,
+                    "name": "default"
+                }
+            ],
+            "config": {}
+        },
+        {
+            "id": "core-router",
+            "type": "router",
+            "name": "CoreRouter",
+            "hostname": "core-rtr",
+            "interfaces": [
+                {
+                    "id": "rtr-g0",
+                    "name": "GigabitEthernet0/0",
+                    "macAddress": "00:RR:RR:00:00:00",
+                    "ipAddress": "192.168.1.1",
+                    "subnetMask": "255.255.255.0",
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "sw-cli-fa1"
+                },
+                {
+                    "id": "rtr-g1",
+                    "name": "GigabitEthernet0/1",
+                    "macAddress": "00:RR:RR:00:00:01",
+                    "ipAddress": "10.0.1.1",
+                    "subnetMask": "255.255.255.0",
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "sw-srv-fa1"
+                }
+            ],
+            "position": {
+                "x": 400,
+                "y": 200
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "routingTable": [
+                {
+                    "destination": "192.168.1.0",
+                    "netmask": "255.255.255.0",
+                    "gateway": "0.0.0.0",
+                    "interface": "GigabitEthernet0/0",
+                    "metric": 0,
+                    "type": "connected"
+                },
+                {
+                    "destination": "10.0.1.0",
+                    "netmask": "255.255.255.0",
+                    "gateway": "0.0.0.0",
+                    "interface": "GigabitEthernet0/1",
+                    "metric": 0,
+                    "type": "connected"
+                }
+            ],
+            "config": {},
+            "dhcpServers": [],
+            "tcpConnections": []
+        },
+        {
+            "id": "switch-server",
+            "type": "switch",
+            "name": "Server-Switch",
+            "hostname": "sw-server",
+            "interfaces": [
+                {
+                    "id": "sw-srv-fa0",
+                    "name": "FastEthernet0/0",
+                    "macAddress": "DD:DD:DD:00:00:00",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "vlanMode": "access",
+                    "accessVlan": 1,
+                    "connectedTo": "app-eth0"
+                },
+                {
+                    "id": "sw-srv-fa1",
+                    "name": "FastEthernet0/1",
+                    "macAddress": "DD:DD:DD:00:00:01",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 100,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "vlanMode": "access",
+                    "accessVlan": 1,
+                    "connectedTo": "rtr-g1"
+                }
+            ],
+            "position": {
+                "x": 600,
+                "y": 200
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "macTable": [],
+            "vlans": [
+                {
+                    "id": 1,
+                    "name": "default"
+                }
+            ],
+            "config": {}
+        }
+    ],
+    "connections": [
+        {
+            "id": "conn-dev-sw",
+            "sourceDeviceId": "client-dev",
+            "targetDeviceId": "switch-client",
+            "sourceInterfaceId": "dev-eth0",
+            "targetInterfaceId": "sw-cli-fa0",
+            "isUp": true,
+            "bandwidth": 100,
+            "latency": 1
+        },
+        {
+            "id": "conn-sw-cli-rtr",
+            "sourceDeviceId": "switch-client",
+            "targetDeviceId": "core-router",
+            "sourceInterfaceId": "sw-cli-fa1",
+            "targetInterfaceId": "rtr-g0",
+            "isUp": true,
+            "bandwidth": 1000,
+            "latency": 1
+        },
+        {
+            "id": "conn-rtr-sw-srv",
+            "sourceDeviceId": "core-router",
+            "targetDeviceId": "switch-server",
+            "sourceInterfaceId": "rtr-g1",
+            "targetInterfaceId": "sw-srv-fa1",
+            "isUp": true,
+            "bandwidth": 1000,
+            "latency": 1
+        },
+        {
+            "id": "conn-sw-srv-app",
+            "sourceDeviceId": "switch-server",
+            "targetDeviceId": "app-server",
+            "sourceInterfaceId": "sw-srv-fa0",
+            "targetInterfaceId": "app-eth0",
+            "isUp": true,
+            "bandwidth": 100,
+            "latency": 1
+        }
+    ],
+    "simulation": {
+        "isRunning": false,
+        "speed": 1,
+        "packets": []
+    },
+    "instructions": [
+        "1. Network topology: Client (192.168.1.0/24) <-> Router <-> Server (10.0.1.0/24)",
+        "2. Server is listening on ports: 22 (SSH), 80 (HTTP), 443 (HTTPS), 3306 (MySQL)",
+        "3. Open terminal on Developer-PC",
+        "4. Try: telnet 10.0.1.100 80",
+        "5. Watch the packet traverse through the router",
+        "6. Use 'netstat -a' on both client and server to see connections",
+        "7. Notice ephemeral ports (49152+) on client side"
+    ]
+}

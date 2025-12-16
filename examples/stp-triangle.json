@@ -4,22 +4,51 @@
     "devices": [
         {
             "id": "switch-1",
-            "name": "SW1-Root",
             "type": "switch",
-            "x": 400,
-            "y": 100,
+            "name": "SW1-Root",
+            "hostname": "sw1-root",
+            "position": {
+                "x": 400,
+                "y": 100
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "macTable": [],
+            "vlans": [
+                {
+                    "id": 1,
+                    "name": "default"
+                }
+            ],
             "interfaces": [
                 {
                     "id": "gi0/0",
                     "name": "GigabitEthernet0/0",
-                    "type": "ethernet",
-                    "speed": 1000
+                    "macAddress": "AA:00:01:00:00:00",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "switchportMode": "trunk",
+                    "connectedTo": "sw2-gi0/0"
                 },
                 {
                     "id": "gi0/1",
                     "name": "GigabitEthernet0/1",
-                    "type": "ethernet",
-                    "speed": 1000
+                    "macAddress": "AA:00:01:00:00:01",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "switchportMode": "trunk",
+                    "connectedTo": "sw3-gi0/0"
                 }
             ],
             "stpConfig": {
@@ -28,32 +57,71 @@
                 "helloTime": 2,
                 "maxAge": 20,
                 "forwardDelay": 15
-            }
+            },
+            "dhcpServers": []
         },
         {
             "id": "switch-2",
-            "name": "SW2",
             "type": "switch",
-            "x": 200,
-            "y": 300,
+            "name": "SW2",
+            "hostname": "sw2",
+            "position": {
+                "x": 200,
+                "y": 300
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "macTable": [],
+            "vlans": [
+                {
+                    "id": 1,
+                    "name": "default"
+                }
+            ],
             "interfaces": [
                 {
                     "id": "gi0/0",
                     "name": "GigabitEthernet0/0",
-                    "type": "ethernet",
-                    "speed": 1000
+                    "macAddress": "AA:00:02:00:00:00",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "switchportMode": "trunk",
+                    "connectedTo": "sw1-gi0/0"
                 },
                 {
                     "id": "gi0/1",
                     "name": "GigabitEthernet0/1",
-                    "type": "ethernet",
-                    "speed": 1000
+                    "macAddress": "AA:00:02:00:00:01",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "switchportMode": "trunk",
+                    "connectedTo": "sw3-gi0/1"
                 },
                 {
                     "id": "gi0/2",
                     "name": "GigabitEthernet0/2",
-                    "type": "ethernet",
-                    "speed": 1000
+                    "macAddress": "AA:00:02:00:00:02",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "switchportMode": "access",
+                    "accessVlan": 1,
+                    "connectedTo": "pc1-eth0"
                 }
             ],
             "stpConfig": {
@@ -62,32 +130,71 @@
                 "helloTime": 2,
                 "maxAge": 20,
                 "forwardDelay": 15
-            }
+            },
+            "dhcpServers": []
         },
         {
             "id": "switch-3",
-            "name": "SW3",
             "type": "switch",
-            "x": 600,
-            "y": 300,
+            "name": "SW3",
+            "hostname": "sw3",
+            "position": {
+                "x": 600,
+                "y": 300
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "macTable": [],
+            "vlans": [
+                {
+                    "id": 1,
+                    "name": "default"
+                }
+            ],
             "interfaces": [
                 {
                     "id": "gi0/0",
                     "name": "GigabitEthernet0/0",
-                    "type": "ethernet",
-                    "speed": 1000
+                    "macAddress": "AA:00:03:00:00:00",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "switchportMode": "trunk",
+                    "connectedTo": "sw1-gi0/1"
                 },
                 {
                     "id": "gi0/1",
                     "name": "GigabitEthernet0/1",
-                    "type": "ethernet",
-                    "speed": 1000
+                    "macAddress": "AA:00:03:00:00:01",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "switchportMode": "trunk",
+                    "connectedTo": "sw2-gi0/1"
                 },
                 {
                     "id": "gi0/2",
                     "name": "GigabitEthernet0/2",
-                    "type": "ethernet",
-                    "speed": 1000
+                    "macAddress": "AA:00:03:00:00:02",
+                    "ipAddress": null,
+                    "subnetMask": null,
+                    "gateway": null,
+                    "isUp": true,
+                    "speed": 1000,
+                    "duplex": "full",
+                    "vlan": 1,
+                    "switchportMode": "access",
+                    "accessVlan": 1,
+                    "connectedTo": "pc2-eth0"
                 }
             ],
             "stpConfig": {
@@ -96,41 +203,70 @@
                 "helloTime": 2,
                 "maxAge": 20,
                 "forwardDelay": 15
-            }
+            },
+            "dhcpServers": []
         },
         {
             "id": "pc-1",
-            "name": "PC1",
             "type": "pc",
-            "x": 100,
-            "y": 450,
+            "name": "PC1",
+            "hostname": "pc1",
+            "position": {
+                "x": 100,
+                "y": 450
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "dnsServers": [
+                "8.8.8.8"
+            ],
+            "dhcpServers": [],
             "interfaces": [
                 {
                     "id": "eth0",
                     "name": "Ethernet0",
-                    "type": "ethernet",
+                    "macAddress": "00:00:00:00:01:01",
+                    "ipAddress": "192.168.1.10",
+                    "subnetMask": "255.255.255.0",
+                    "gateway": "192.168.1.1",
+                    "isUp": true,
                     "speed": 1000,
-                    "ip": "192.168.1.10",
-                    "subnet": "255.255.255.0",
-                    "gateway": "192.168.1.1"
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "sw2-gi0/2"
                 }
             ]
         },
         {
             "id": "pc-2",
-            "name": "PC2",
             "type": "pc",
-            "x": 700,
-            "y": 450,
+            "name": "PC2",
+            "hostname": "pc2",
+            "position": {
+                "x": 700,
+                "y": 450
+            },
+            "isRunning": true,
+            "arpTable": [],
+            "config": {},
+            "dnsServers": [
+                "8.8.8.8"
+            ],
+            "dhcpServers": [],
             "interfaces": [
                 {
                     "id": "eth0",
                     "name": "Ethernet0",
-                    "type": "ethernet",
+                    "macAddress": "00:00:00:00:02:01",
+                    "ipAddress": "192.168.1.20",
+                    "subnetMask": "255.255.255.0",
+                    "gateway": "192.168.1.1",
+                    "isUp": true,
                     "speed": 1000,
-                    "ip": "192.168.1.20",
-                    "subnet": "255.255.255.0",
-                    "gateway": "192.168.1.1"
+                    "duplex": "full",
+                    "vlan": 1,
+                    "connectedTo": "sw3-gi0/2"
                 }
             ]
         }
@@ -142,7 +278,11 @@
             "sourceDeviceId": "switch-1",
             "sourceInterfaceId": "gi0/0",
             "targetDeviceId": "switch-2",
-            "targetInterfaceId": "gi0/0"
+            "targetInterfaceId": "gi0/0",
+            "isUp": true,
+            "bandwidth": 1000,
+            "latency": 1,
+            "packetLoss": 0
         },
         {
             "id": "conn-2",
@@ -150,7 +290,11 @@
             "sourceDeviceId": "switch-1",
             "sourceInterfaceId": "gi0/1",
             "targetDeviceId": "switch-3",
-            "targetInterfaceId": "gi0/0"
+            "targetInterfaceId": "gi0/0",
+            "isUp": true,
+            "bandwidth": 1000,
+            "latency": 1,
+            "packetLoss": 0
         },
         {
             "id": "conn-3",
@@ -158,7 +302,11 @@
             "sourceDeviceId": "switch-2",
             "sourceInterfaceId": "gi0/1",
             "targetDeviceId": "switch-3",
-            "targetInterfaceId": "gi0/1"
+            "targetInterfaceId": "gi0/1",
+            "isUp": true,
+            "bandwidth": 1000,
+            "latency": 1,
+            "packetLoss": 0
         },
         {
             "id": "conn-4",
@@ -166,7 +314,11 @@
             "sourceDeviceId": "pc-1",
             "sourceInterfaceId": "eth0",
             "targetDeviceId": "switch-2",
-            "targetInterfaceId": "gi0/2"
+            "targetInterfaceId": "gi0/2",
+            "isUp": true,
+            "bandwidth": 1000,
+            "latency": 1,
+            "packetLoss": 0
         },
         {
             "id": "conn-5",
@@ -174,7 +326,11 @@
             "sourceDeviceId": "pc-2",
             "sourceInterfaceId": "eth0",
             "targetDeviceId": "switch-3",
-            "targetInterfaceId": "gi0/2"
+            "targetInterfaceId": "gi0/2",
+            "isUp": true,
+            "bandwidth": 1000,
+            "latency": 1,
+            "packetLoss": 0
         }
     ]
 }

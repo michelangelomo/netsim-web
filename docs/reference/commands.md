@@ -294,3 +294,72 @@ show stp detail
 show spanning-tree detail
 ```
 
+## TCP Connection Commands
+
+### netstat
+Display network connections and statistics. Shows TCP connection states.
+
+```
+netstat              # Show active connections
+netstat -a           # Show all connections (including LISTEN)
+netstat -l           # Show only listening ports
+netstat -r           # Show routing table
+netstat -i           # Show interface statistics
+```
+
+**Example Output:**
+```
+Active Internet connections
+Proto Recv-Q Send-Q Local Address           Foreign Address         State
+tcp    0      0 *:80                    *:*                     LISTEN
+tcp    0      0 192.168.1.10:49152      192.168.1.100:80        ESTABLISHED
+tcp    0      0 192.168.1.10:49153      192.168.1.200:443       TIME_WAIT
+```
+
+**TCP States:**
+| State | Description |
+|-------|-------------|
+| LISTEN | Waiting for incoming connections |
+| SYN_SENT | Connection request sent |
+| SYN_RECV | Connection request received |
+| ESTABLISHED | Active connection |
+| FIN_WAIT_1 | Close initiated |
+| FIN_WAIT_2 | Close acknowledged |
+| TIME_WAIT | Waiting for timeout |
+| CLOSE_WAIT | Remote side closed |
+| LAST_ACK | Waiting for final ACK |
+| CLOSED | Connection closed |
+
+### telnet
+Open a TCP connection to a remote host.
+
+```
+telnet <host> [port]
+```
+
+**Arguments:**
+- `host` - Target IP address
+- `port` - Target port (default: 23)
+
+**Examples:**
+```
+telnet 192.168.1.100 80    # Connect to port 80
+telnet 10.0.0.1            # Connect to default telnet port 23
+```
+
+**Output:**
+```
+Trying 192.168.1.100...
+Connected to 192.168.1.100.
+Escape character is '^]'.
+```
+
+### listen (GUI)
+Start listening on a TCP port. Available through the Properties Panel:
+
+1. Select a device (PC, Server, Router)
+2. Expand "TCP Connections" section
+3. Click "Listen on Port"
+4. Enter port number (1-65535)
+5. Click "Start Listening"
+

@@ -64,6 +64,9 @@ interface NetworkStoreState {
   setStpPortCost: (deviceId: string, interfaceId: string, cost: number) => void;
   setStpPortPriority: (deviceId: string, interfaceId: string, priority: number) => void;
   runStpConvergence: () => void;
+  // TCP
+  tcpListen: (deviceId: string, port: number) => void;
+  tcpConnect: (deviceId: string, remoteIP: string, remotePort: number) => void;
 }
 
 // Terminal state for tracking context (interface config mode, VLAN config mode, etc.)
@@ -1446,7 +1449,7 @@ Type 'help <command>' for detailed usage information.
 
   netstat: {
     description: 'Print network connections and statistics',
-    usage: 'netstat [-r|-i]',
+    usage: 'netstat [-r|-i|-l|-a]',
     execute: (args, deviceId, store) => {
       if (!deviceId) {
         return { output: 'Error: No device selected', success: false };
@@ -1471,8 +1474,27 @@ Type 'help <command>' for detailed usage information.
         return { output, success: true };
       }
 
+      // Show TCP connections
+      const tcpConnections = device.tcpConnections || [];
+      const showListening = args[0] === '-l';
+      const showAll = args[0] === '-a' || !args[0];
+
       let output = 'Active Internet connections\n';
       output += 'Proto Recv-Q Send-Q Local Address           Foreign Address         State\n';
+
+      tcpConnections.forEach((conn) => {
+        // Filter based on options
+        if (showListening && conn.state !== 'LISTEN') return;
+        if (!showAll && !showListening && conn.state === 'LISTEN') return;
+
+        const localAddr = `${conn.localIP || '*'}:${conn.localPort}`.padEnd(23);
+        const remoteAddr = conn.state === 'LISTEN'
+          ? '*:*'.padEnd(23)
+          : `${conn.remoteIP || '*'}:${conn.remotePort}`.padEnd(23);
+
+        output += `tcp    0      0 ${localAddr} ${remoteAddr} ${conn.state}\n`;
+      });
+
       return { output, success: true };
     },
   },
@@ -1586,6 +1608,44 @@ Type 'help <command>' for detailed usage information.
       }
 
       return { output, success: found };
+    },
+  },
+
+  telnet: {
+    description: 'Open a TCP connection to a remote host',
+    usage: 'telnet <host> [port]',
+    execute: (args, deviceId, store) => {
+      if (!deviceId) {
+        return { output: 'telnet: No device selected', success: false };
+      }
+
+      if (!args[0]) {
+        return { output: 'Usage: telnet <host> [port]', success: false };
+      }
+
+      const device = store.getDeviceById(deviceId);
+      if (!device) {
+        return { output: 'telnet: Device not found', success: false };
+      }
+
+      const host = args[0];
+      const port = args[1] ? parseInt(args[1], 10) : 23;
+
+      if (!isValidIP(host)) {
+        return { output: `telnet: could not resolve ${host}: Name or service not known`, success: false };
+      }
+
+      if (isNaN(port) || port < 1 || port > 65535) {
+        return { output: `telnet: invalid port number: ${args[1]}`, success: false };
+      }
+
+      // Initiate TCP connection
+      store.tcpConnect(deviceId, host, port);
+
+      return {
+        output: `Trying ${host}...\nConnected to ${host}.\nEscape character is '^]'.`,
+        success: true
+      };
     },
   },
 
