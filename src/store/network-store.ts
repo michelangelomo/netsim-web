@@ -174,6 +174,8 @@ interface NetworkStore {
   activeTerminalDevice: string | null;
   terminalMinimized: boolean;
   terminalHistory: Map<string, Array<{ command: string; output: string; timestamp: number }>>;
+  terminalTabs: Array<{ deviceId: string; id: string; name: string }>;
+  activeTerminalTabIndex: number;
 
   // Notifications
   notifications: Notification[];
@@ -273,6 +275,10 @@ interface NetworkStore {
   executeCommand: (deviceId: string, command: string) => string;
   addTerminalHistory: (deviceId: string, command: string, output: string) => void;
   clearTerminalHistory: (deviceId: string) => void;
+  addTerminalTab: (deviceId: string) => void;
+  removeTerminalTab: (tabId: string) => void;
+  setActiveTerminalTab: (tabIndex: number) => void;
+  closeAllTerminalTabs: () => void;
 
   // Actions - Notifications
   addNotification: (notification: Omit<Notification, 'id' | 'timestamp'>) => void;
@@ -398,6 +404,8 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
   activeTerminalDevice: null,
   terminalMinimized: false,
   terminalHistory: new Map(),
+  terminalTabs: [],
+  activeTerminalTabIndex: 0,
   notifications: [],
   deviceCounters: {
     pc: 0,
@@ -2358,7 +2366,99 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
 
   // Terminal
   setActiveTerminal: (deviceId) => {
-    set({ activeTerminalDevice: deviceId });
+    if (deviceId === null) {
+      // Close all tabs when terminal is closed
+      set({ activeTerminalDevice: null, terminalTabs: [], activeTerminalTabIndex: 0 });
+    } else {
+      const { terminalTabs, devices } = get();
+      const device = devices.find(d => d.id === deviceId);
+      const deviceName = device?.name || 'Terminal';
+
+      // Check if a tab for this device already exists
+      const existingTabIndex = terminalTabs.findIndex(tab => tab.deviceId === deviceId);
+
+      if (existingTabIndex >= 0) {
+        // Switch to existing tab
+        set({
+          activeTerminalDevice: deviceId,
+          activeTerminalTabIndex: existingTabIndex,
+        });
+      } else {
+        // Create a new tab for this device
+        const newTab = { deviceId, id: `tab-${Date.now()}`, name: deviceName };
+        const newTabs = [...terminalTabs, newTab];
+        set({
+          activeTerminalDevice: deviceId,
+          terminalTabs: newTabs,
+          activeTerminalTabIndex: newTabs.length - 1,
+        });
+      }
+    }
+  },
+
+  addTerminalTab: (deviceId) => {
+    const { terminalTabs, devices } = get();
+    const device = devices.find(d => d.id === deviceId);
+    const deviceName = device?.name || 'Terminal';
+
+    // Check if a tab for this device already exists
+    const existingTabIndex = terminalTabs.findIndex(tab => tab.deviceId === deviceId);
+
+    if (existingTabIndex >= 0) {
+      // Switch to existing tab
+      set({
+        activeTerminalDevice: deviceId,
+        activeTerminalTabIndex: existingTabIndex,
+      });
+    } else {
+      // Create a new tab for this device
+      const newTab = { deviceId, id: `tab-${Date.now()}`, name: deviceName };
+      const newTabs = [...terminalTabs, newTab];
+      set({
+        terminalTabs: newTabs,
+        activeTerminalTabIndex: newTabs.length - 1,
+        activeTerminalDevice: deviceId,
+      });
+    }
+  },
+
+  removeTerminalTab: (tabId) => {
+    const { terminalTabs, activeTerminalTabIndex } = get();
+    if (terminalTabs.length <= 1) {
+      // Close terminal if last tab
+      set({ activeTerminalDevice: null, terminalTabs: [], activeTerminalTabIndex: 0 });
+      return;
+    }
+    const tabIndex = terminalTabs.findIndex(tab => tab.id === tabId);
+    if (tabIndex < 0) return;
+
+    const newTabs = terminalTabs.filter(tab => tab.id !== tabId);
+    let newActiveIndex = activeTerminalTabIndex;
+    if (tabIndex <= activeTerminalTabIndex) {
+      newActiveIndex = Math.max(0, activeTerminalTabIndex - 1);
+    }
+    if (newActiveIndex >= newTabs.length) {
+      newActiveIndex = newTabs.length - 1;
+    }
+    set({
+      terminalTabs: newTabs,
+      activeTerminalTabIndex: newActiveIndex,
+      activeTerminalDevice: newTabs[newActiveIndex]?.deviceId || null,
+    });
+  },
+
+  setActiveTerminalTab: (tabIndex) => {
+    const { terminalTabs } = get();
+    if (tabIndex >= 0 && tabIndex < terminalTabs.length) {
+      set({
+        activeTerminalTabIndex: tabIndex,
+        activeTerminalDevice: terminalTabs[tabIndex].deviceId,
+      });
+    }
+  },
+
+  closeAllTerminalTabs: () => {
+    set({ activeTerminalDevice: null, terminalTabs: [], activeTerminalTabIndex: 0 });
   },
 
   setTerminalMinimized: (minimized) => {

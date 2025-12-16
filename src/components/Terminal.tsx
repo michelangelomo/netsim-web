@@ -20,6 +20,13 @@ interface TerminalLine {
   timestamp: number;
 }
 
+// Per-tab state for lines and command history
+interface TabState {
+  lines: TerminalLine[];
+  commandHistory: string[];
+  historyIndex: number;
+}
+
 export function Terminal() {
   const {
     activeTerminalDevice,
@@ -30,66 +37,108 @@ export function Terminal() {
     clearTerminalHistory,
     terminalMinimized: isMinimized,
     setTerminalMinimized: setIsMinimized,
+    terminalTabs,
+    activeTerminalTabIndex,
+    removeTerminalTab,
+    setActiveTerminalTab,
   } = useNetworkStore();
 
   const [isMaximized, setIsMaximized] = useState(false);
   const [inputValue, setInputValue] = useState('');
-  const [commandHistory, setCommandHistory] = useState<string[]>([]);
-  const [historyIndex, setHistoryIndex] = useState(-1);
-  const [lines, setLines] = useState<TerminalLine[]>([]);
   const [isExecuting, setIsExecuting] = useState(false);
+
+  // Per-tab state stored by tab ID
+  const [tabStates, setTabStates] = useState<Map<string, TabState>>(new Map());
 
   const inputRef = useRef<HTMLInputElement>(null);
   const outputRef = useRef<HTMLDivElement>(null);
+
+  // Get active tab
+  const activeTab = terminalTabs[activeTerminalTabIndex];
+  const activeTabId = activeTab?.id;
 
   // Get active device
   const activeDevice = activeTerminalDevice
     ? devices.find((d) => d.id === activeTerminalDevice)
     : null;
 
-  // Load history when device changes
-  useEffect(() => {
-    if (activeTerminalDevice) {
-      const history = terminalHistory.get(activeTerminalDevice) || [];
-      const newLines: TerminalLine[] = [];
+  // Get or create tab state
+  const getTabState = useCallback((tabId: string): TabState => {
+    return tabStates.get(tabId) || { lines: [], commandHistory: [], historyIndex: -1 };
+  }, [tabStates]);
 
-      // Add welcome message
-      newLines.push({
-        type: 'output',
-        content: `
+  const updateTabState = useCallback((tabId: string, updates: Partial<TabState>) => {
+    setTabStates(prev => {
+      const newMap = new Map(prev);
+      const currentState = prev.get(tabId) || { lines: [], commandHistory: [], historyIndex: -1 };
+      newMap.set(tabId, { ...currentState, ...updates });
+      return newMap;
+    });
+  }, []);
+
+  // Current tab state
+  const currentTabState = activeTabId ? getTabState(activeTabId) : { lines: [], commandHistory: [], historyIndex: -1 };
+  const { lines, commandHistory, historyIndex } = currentTabState;
+
+  // Helper to update lines for current tab
+  const setLines = useCallback((updater: TerminalLine[] | ((prev: TerminalLine[]) => TerminalLine[])) => {
+    if (!activeTabId) return;
+    setTabStates(prev => {
+      const newMap = new Map(prev);
+      const currentState = prev.get(activeTabId) || { lines: [], commandHistory: [], historyIndex: -1 };
+      const newLines = typeof updater === 'function' ? updater(currentState.lines) : updater;
+      newMap.set(activeTabId, { ...currentState, lines: newLines });
+      return newMap;
+    });
+  }, [activeTabId]);
+
+  // Initialize tab state when a new tab is created
+  useEffect(() => {
+    if (!activeTabId || !activeTerminalDevice) return;
+
+    // Check if this tab already has state
+    if (tabStates.has(activeTabId)) return;
+
+    const history = terminalHistory.get(activeTerminalDevice) || [];
+    const newLines: TerminalLine[] = [];
+
+    // Add welcome message
+    newLines.push({
+      type: 'output',
+      content: `
 ╔══════════════════════════════════════════════════════════════╗
 ║  NetSim Web Terminal v1.0                                    ║
 ║  Type 'help' for available commands                          ║
 ╚══════════════════════════════════════════════════════════════╝
 `,
+      timestamp: Date.now(),
+    });
+
+    const device = devices.find(d => d.id === activeTerminalDevice);
+    if (device) {
+      newLines.push({
+        type: 'output',
+        content: `Connected to ${device.name} (${device.hostname})`,
         timestamp: Date.now(),
       });
-
-      if (activeDevice) {
-        newLines.push({
-          type: 'output',
-          content: `Connected to ${activeDevice.name} (${activeDevice.hostname})`,
-          timestamp: Date.now(),
-        });
-      }
-
-      // Add previous history
-      history.forEach((entry) => {
-        newLines.push({
-          type: 'input',
-          content: entry.command,
-          timestamp: entry.timestamp,
-        });
-        newLines.push({
-          type: 'output',
-          content: entry.output,
-          timestamp: entry.timestamp,
-        });
-      });
-
-      setLines(newLines);
     }
-  }, [activeTerminalDevice, activeDevice]);
+
+    // Add previous history
+    history.forEach((entry) => {
+      newLines.push({
+        type: 'input',
+        content: entry.command,
+        timestamp: entry.timestamp,
+      });
+      newLines.push({
+        type: 'output',
+        content: entry.output,
+        timestamp: entry.timestamp,
+      });
+    });
+
+    updateTabState(activeTabId, { lines: newLines });
+  }, [activeTabId, activeTerminalDevice, devices, terminalHistory, tabStates, updateTabState]);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -98,21 +147,50 @@ export function Terminal() {
     }
   }, [lines]);
 
-  // Focus input when terminal opens
+  // Focus input when terminal opens or tab changes
   useEffect(() => {
     if (activeTerminalDevice && !isMinimized && inputRef.current) {
       inputRef.current.focus();
     }
-  }, [activeTerminalDevice, isMinimized]);
+  }, [activeTerminalDevice, isMinimized, activeTabId]);
+
+  // Global keyboard listener for Alt+Number tab switching
+  useEffect(() => {
+    if (!activeTerminalDevice) return;
+
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Alt+Number for tab switching (1-9)
+      if (e.altKey && e.key >= '1' && e.key <= '9') {
+        e.preventDefault();
+        const tabIndex = parseInt(e.key, 10) - 1;
+        if (tabIndex < terminalTabs.length) {
+          setActiveTerminalTab(tabIndex);
+          inputRef.current?.focus();
+        }
+      }
+      // Alt+W to close current tab
+      if (e.altKey && e.key === 'w') {
+        e.preventDefault();
+        if (activeTabId) {
+          removeTerminalTab(activeTabId);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [activeTerminalDevice, terminalTabs.length, setActiveTerminalTab, activeTabId, removeTerminalTab]);
 
   // Handle command execution
   const executeCommand = useCallback(async () => {
+    if (!activeTabId) return;
     const cmd = inputValue.trim();
     if (!cmd || isExecuting) return;
 
-    // Add to command history
-    setCommandHistory((prev) => [...prev.filter((c) => c !== cmd), cmd]);
-    setHistoryIndex(-1);
+    // Add to command history for this tab
+    const currentState = tabStates.get(activeTabId) || { lines: [], commandHistory: [], historyIndex: -1 };
+    const newCommandHistory = [...currentState.commandHistory.filter((c) => c !== cmd), cmd];
+    updateTabState(activeTabId, { commandHistory: newCommandHistory, historyIndex: -1 });
 
     // Add input line
     setLines((prev) => [...prev, { type: 'input', content: cmd, timestamp: Date.now() }]);
@@ -125,7 +203,10 @@ export function Terminal() {
     // Handle special signals
     if (result.output === 'EXIT_TERMINAL') {
       setIsExecuting(false);
-      setActiveTerminal(null);
+      // Close current tab instead of all tabs
+      if (activeTabId) {
+        removeTerminalTab(activeTabId);
+      }
       return;
     }
 
@@ -156,28 +237,38 @@ export function Terminal() {
     }
 
     setIsExecuting(false);
-  }, [inputValue, activeTerminalDevice, addTerminalHistory, clearTerminalHistory, setActiveTerminal, isExecuting]);
+  }, [inputValue, activeTerminalDevice, activeTabId, activeTerminalTabIndex, addTerminalHistory, clearTerminalHistory, removeTerminalTab, isExecuting, setLines, tabStates, updateTabState]);
 
   // Handle key events
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
+      // Alt+Number for tab switching (1-9)
+      if (e.altKey && e.key >= '1' && e.key <= '9') {
+        e.preventDefault();
+        const tabIndex = parseInt(e.key, 10) - 1;
+        if (tabIndex < terminalTabs.length) {
+          setActiveTerminalTab(tabIndex);
+        }
+        return;
+      }
+
       if (e.key === 'Enter') {
         executeCommand();
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        if (commandHistory.length > 0) {
+        if (commandHistory.length > 0 && activeTabId) {
           const newIndex = historyIndex < commandHistory.length - 1 ? historyIndex + 1 : historyIndex;
-          setHistoryIndex(newIndex);
+          updateTabState(activeTabId, { historyIndex: newIndex });
           setInputValue(commandHistory[commandHistory.length - 1 - newIndex] || '');
         }
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
-        if (historyIndex > 0) {
+        if (historyIndex > 0 && activeTabId) {
           const newIndex = historyIndex - 1;
-          setHistoryIndex(newIndex);
+          updateTabState(activeTabId, { historyIndex: newIndex });
           setInputValue(commandHistory[commandHistory.length - 1 - newIndex] || '');
-        } else {
-          setHistoryIndex(-1);
+        } else if (activeTabId) {
+          updateTabState(activeTabId, { historyIndex: -1 });
           setInputValue('');
         }
       } else if (e.key === 'Tab') {
@@ -220,9 +311,15 @@ export function Terminal() {
       } else if (e.key === 'l' && e.ctrlKey) {
         e.preventDefault();
         setLines([]);
+      } else if (e.key === 'w' && e.ctrlKey) {
+        // Ctrl+W: Close current tab
+        e.preventDefault();
+        if (activeTabId) {
+          removeTerminalTab(activeTabId);
+        }
       }
     },
-    [executeCommand, commandHistory, historyIndex, inputValue, activeDevice]
+    [executeCommand, commandHistory, historyIndex, inputValue, activeDevice, activeTabId, updateTabState, setLines, terminalTabs, setActiveTerminalTab, removeTerminalTab]
   );
 
   // Clear terminal
@@ -231,7 +328,7 @@ export function Terminal() {
     if (activeTerminalDevice) {
       clearTerminalHistory(activeTerminalDevice);
     }
-  }, [activeTerminalDevice, clearTerminalHistory]);
+  }, [activeTerminalDevice, clearTerminalHistory, setLines]);
 
   // Get prompt based on device
   const getPrompt = () => {
@@ -265,61 +362,95 @@ export function Terminal() {
             transition-all duration-300 ease-out
           `}
         >
-          {/* Terminal Header */}
-          <div className="flex items-center justify-between px-4 h-12 border-b border-dark-700 bg-dark-800/50">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <TerminalIcon className="w-4 h-4 text-emerald-500" />
-                <span className="text-sm font-medium text-white">
-                  {activeDevice?.name || 'Terminal'}
-                </span>
-              </div>
-              {activeDevice && (
-                <span className="px-2 py-0.5 text-xs bg-dark-700 rounded text-dark-300">
-                  {activeDevice.type.toUpperCase()}
-                </span>
-              )}
+          {/* Terminal Header with Tabs */}
+          <div className="flex flex-col border-b border-dark-700 bg-dark-800/50">
+            {/* Tabs Row */}
+            <div className="flex items-center h-10 px-2 gap-1 overflow-x-auto scrollbar-thin">
+              {terminalTabs.map((tab, index) => {
+                const tabDevice = devices.find(d => d.id === tab.deviceId);
+                const isActive = index === activeTerminalTabIndex;
+                return (
+                  <div
+                    key={tab.id}
+                    className={`
+                      flex items-center gap-2 px-3 py-1.5 rounded-t text-sm cursor-pointer
+                      transition-colors min-w-[100px] max-w-[180px] group
+                      ${isActive
+                        ? 'bg-dark-900 text-white border-t border-l border-r border-dark-600'
+                        : 'bg-dark-700/50 text-dark-300 hover:bg-dark-700 hover:text-white'}
+                    `}
+                    onClick={() => setActiveTerminalTab(index)}
+                    title={`${tabDevice?.name || 'Terminal'} (Alt+${index + 1})`}
+                  >
+                    <TerminalIcon className={`w-3 h-3 flex-shrink-0 ${isActive ? 'text-emerald-500' : 'text-dark-400'}`} />
+                    <span className="truncate flex-1">{tab.name}</span>
+                    {terminalTabs.length > 1 && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeTerminalTab(tab.id);
+                        }}
+                        className="p-0.5 opacity-0 group-hover:opacity-100 hover:bg-dark-600 rounded transition-opacity"
+                        title="Close tab (Alt+W)"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
-            <div className="flex items-center gap-1">
-              <button
-                onClick={handleClear}
-                className="p-1.5 text-dark-400 hover:text-white hover:bg-dark-700 rounded transition-colors"
-                title="Clear Terminal"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setIsMinimized(!isMinimized)}
-                className="p-1.5 text-dark-400 hover:text-white hover:bg-dark-700 rounded transition-colors"
-                title={isMinimized ? 'Expand' : 'Minimize'}
-              >
-                {isMinimized ? (
-                  <ChevronUp className="w-4 h-4" />
-                ) : (
-                  <ChevronDown className="w-4 h-4" />
+            {/* Controls Row */}
+            <div className="flex items-center justify-between px-4 h-8 bg-dark-900/50">
+              <div className="flex items-center gap-2">
+                {activeDevice && (
+                  <span className="px-2 py-0.5 text-xs bg-dark-700 rounded text-dark-300">
+                    {activeDevice.type.toUpperCase()}
+                  </span>
                 )}
-              </button>
-              <button
-                onClick={() => setIsMaximized(!isMaximized)}
-                className="p-1.5 text-dark-400 hover:text-white hover:bg-dark-700 rounded transition-colors"
-                title="Maximize"
-              >
-                <Maximize2 className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setActiveTerminal(null)}
-                className="p-1.5 text-dark-400 hover:text-rose-400 hover:bg-dark-700 rounded transition-colors"
-                title="Close"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              </div>
+
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={handleClear}
+                  className="p-1 text-dark-400 hover:text-white hover:bg-dark-700 rounded transition-colors"
+                  title="Clear Terminal"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => setIsMinimized(!isMinimized)}
+                  className="p-1 text-dark-400 hover:text-white hover:bg-dark-700 rounded transition-colors"
+                  title={isMinimized ? 'Expand' : 'Minimize'}
+                >
+                  {isMinimized ? (
+                    <ChevronUp className="w-3.5 h-3.5" />
+                  ) : (
+                    <ChevronDown className="w-3.5 h-3.5" />
+                  )}
+                </button>
+                <button
+                  onClick={() => setIsMaximized(!isMaximized)}
+                  className="p-1 text-dark-400 hover:text-white hover:bg-dark-700 rounded transition-colors"
+                  title="Maximize"
+                >
+                  <Maximize2 className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => setActiveTerminal(null)}
+                  className="p-1 text-dark-400 hover:text-rose-400 hover:bg-dark-700 rounded transition-colors"
+                  title="Close Terminal"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
           </div>
 
           {/* Terminal Body */}
           {!isMinimized && (
-            <div className="flex flex-col h-[calc(100%-3rem)]">
+            <div className="flex flex-col h-[calc(100%-4.5rem)]">
               {/* Output area */}
               <div
                 ref={outputRef}
