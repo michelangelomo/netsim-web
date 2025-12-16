@@ -1,4 +1,4 @@
-import type { NetworkDevice, RouteEntry, DhcpServerConfig, VLAN, SVIInterface } from '@/types/network';
+import type { NetworkDevice, RouteEntry, DhcpServerConfig, VLAN, SVIInterface, StpConfig, StpPortConfig } from '@/types/network';
 import {
   isValidIP,
   isValidSubnetMask,
@@ -57,6 +57,13 @@ interface NetworkStoreState {
   addSvi: (deviceId: string, svi: { vlanId: number; ipAddress?: string; subnetMask?: string; isUp: boolean }) => boolean;
   removeSvi: (deviceId: string, vlanId: number) => boolean;
   updateInterface: (deviceId: string, interfaceId: string, updates: Partial<NetworkDevice['interfaces'][0]>) => void;
+  // STP
+  enableStp: (deviceId: string) => void;
+  disableStp: (deviceId: string) => void;
+  setStpBridgePriority: (deviceId: string, priority: number) => void;
+  setStpPortCost: (deviceId: string, interfaceId: string, cost: number) => void;
+  setStpPortPriority: (deviceId: string, interfaceId: string, priority: number) => void;
+  runStpConvergence: () => void;
 }
 
 // Terminal state for tracking context (interface config mode, VLAN config mode, etc.)
@@ -130,6 +137,31 @@ Available Commands:
   ip route add <net> via <gateway>       - Add static route
   ip route del <net>                     - Delete route
   ip link set <interface> up/down        - Enable/disable interface
+  interface <name>         - Enter interface configuration mode
+
+  VLAN (Switches)
+  ───────────────
+  vlan <1-4094>            - Create VLAN or enter VLAN config mode
+  no vlan <id>             - Delete VLAN
+  show vlan                - Display VLAN information
+  show interfaces trunk    - Display trunk port information
+  switchport mode access|trunk           - Set switchport mode
+  switchport access vlan <id>            - Assign access VLAN
+  switchport trunk allowed vlan <ids>    - Set allowed trunk VLANs
+  switchport trunk native vlan <id>      - Set native VLAN
+  interface vlan <id>      - Configure SVI (Layer 3)
+
+  SPANNING TREE (Switches)
+  ────────────────────────
+  spanning-tree enable     - Enable STP on switch
+  spanning-tree disable    - Disable STP on switch
+  spanning-tree priority <0-61440>       - Set bridge priority
+  spanning-tree cost <value>             - Set port cost (interface mode)
+  spanning-tree port-priority <0-255>    - Set port priority
+  spanning-tree reconverge - Force STP recalculation
+  show spanning-tree       - Display STP status
+  show stp interface       - Display per-port STP states
+  show stp detail          - Display detailed STP port info
 
   DHCP
   ────
@@ -150,6 +182,8 @@ Available Commands:
   SYSTEM
   ──────
   clear                    - Clear terminal screen
+  clear arp                - Clear ARP table
+  clear mac-address-table  - Clear MAC table (switches)
   exit                     - Close terminal
   whoami                   - Display current device info
   show running-config      - Display device configuration
@@ -816,6 +850,92 @@ Type 'help <command>' for detailed usage information.
     },
   },
 
+  // ============ STP COMMANDS ============
+
+  'spanning-tree': {
+    description: 'Configure Spanning Tree Protocol',
+    usage: 'spanning-tree [enable|disable|priority <value>|cost <value>]',
+    execute: (args, deviceId, store) => {
+      if (!deviceId) {
+        return { output: 'Error: No device selected', success: false };
+      }
+
+      const device = store.getDeviceById(deviceId);
+      if (!device) {
+        return { output: 'Error: Device not found', success: false };
+      }
+
+      if (device.type !== 'switch') {
+        return { output: 'Error: STP configuration is only available on switches', success: false };
+      }
+
+      const subCmd = args[0]?.toLowerCase();
+
+      if (!subCmd || subCmd === 'enable') {
+        store.enableStp(deviceId);
+        store.runStpConvergence();
+        return { output: 'Spanning Tree Protocol enabled', success: true };
+      }
+
+      if (subCmd === 'disable') {
+        store.disableStp(deviceId);
+        return { output: 'Spanning Tree Protocol disabled', success: true };
+      }
+
+      if (subCmd === 'priority') {
+        const priority = parseInt(args[1], 10);
+        if (isNaN(priority) || priority < 0 || priority > 61440) {
+          return { output: 'Error: Priority must be between 0-61440 (multiples of 4096)', success: false };
+        }
+        store.setStpBridgePriority(deviceId, priority);
+        store.runStpConvergence();
+        return { output: `Bridge priority set to ${Math.floor(priority / 4096) * 4096}`, success: true };
+      }
+
+      if (subCmd === 'cost') {
+        const ctx = getContext(deviceId);
+        if (!ctx.currentInterfaceId) {
+          return { output: 'Error: Enter interface configuration mode first. Use "interface <name>"', success: false };
+        }
+
+        const cost = parseInt(args[1], 10);
+        if (isNaN(cost) || cost < 1 || cost > 200000000) {
+          return { output: 'Error: Cost must be between 1-200000000', success: false };
+        }
+
+        store.setStpPortCost(deviceId, ctx.currentInterfaceId, cost);
+        store.runStpConvergence();
+        return { output: `STP port cost set to ${cost}`, success: true };
+      }
+
+      if (subCmd === 'port-priority') {
+        const ctx = getContext(deviceId);
+        if (!ctx.currentInterfaceId) {
+          return { output: 'Error: Enter interface configuration mode first. Use "interface <name>"', success: false };
+        }
+
+        const priority = parseInt(args[1], 10);
+        if (isNaN(priority) || priority < 0 || priority > 255) {
+          return { output: 'Error: Port priority must be between 0-255', success: false };
+        }
+
+        store.setStpPortPriority(deviceId, ctx.currentInterfaceId, priority);
+        store.runStpConvergence();
+        return { output: `STP port priority set to ${priority}`, success: true };
+      }
+
+      if (subCmd === 'reconverge' || subCmd === 'recalculate') {
+        store.runStpConvergence();
+        return { output: 'STP topology recalculated', success: true };
+      }
+
+      return {
+        output: 'Usage: spanning-tree [enable|disable|priority <0-61440>|cost <1-200000000>|port-priority <0-255>|reconverge]',
+        success: false,
+      };
+    },
+  },
+
   interface: {
     description: 'Enter interface configuration mode',
     usage: 'interface <name> | interface vlan <id>',
@@ -1219,8 +1339,106 @@ Type 'help <command>' for detailed usage information.
         return { output, success: true };
       }
 
+      // STP commands
+      if (subCmd === 'spanning-tree' || subCmd === 'stp') {
+        if (device.type !== 'switch') {
+          return { output: 'Error: STP information is only available on switches', success: false };
+        }
+
+        if (!device.stpConfig) {
+          return { output: 'Spanning Tree Protocol is not enabled on this device', success: true };
+        }
+
+        const stp = device.stpConfig;
+        const isRoot = stp.bridgeId === stp.rootBridgeId;
+
+        let output = 'Spanning Tree Protocol Status\n';
+        output += '═══════════════════════════════════════════════════════════════\n\n';
+        output += `STP Mode:         Standard (802.1D)\n`;
+        output += `Status:           ${stp.enabled ? 'Enabled' : 'Disabled'}\n\n`;
+        output += `Bridge ID\n`;
+        output += `  Priority:       ${stp.bridgePriority}\n`;
+        output += `  Bridge ID:      ${stp.bridgeId}\n`;
+        output += `  This bridge is ${isRoot ? 'the Root' : 'NOT the Root'}\n\n`;
+        output += `Root Bridge\n`;
+        output += `  Root ID:        ${stp.rootBridgeId}\n`;
+        output += `  Root Path Cost: ${stp.rootPathCost}\n`;
+        if (!isRoot && stp.rootPort) {
+          const rootPortIface = device.interfaces.find((i) => i.id === stp.rootPort);
+          output += `  Root Port:      ${rootPortIface?.name || stp.rootPort}\n`;
+        }
+        output += '\n';
+        output += `Timers\n`;
+        output += `  Hello Time:     ${stp.helloTime} sec\n`;
+        output += `  Max Age:        ${stp.maxAge} sec\n`;
+        output += `  Forward Delay:  ${stp.forwardDelay} sec\n\n`;
+        output += `Topology Changes: ${stp.topologyChangeCount}\n`;
+        if (stp.lastTopologyChange) {
+          const elapsed = Math.floor((Date.now() - stp.lastTopologyChange) / 1000);
+          output += `Last Change:      ${elapsed} seconds ago\n`;
+        }
+
+        return { output, success: true };
+      }
+
+      if (subCmd === 'spanning-tree interface' || subCmd === 'stp interface') {
+        if (device.type !== 'switch') {
+          return { output: 'Error: STP information is only available on switches', success: false };
+        }
+
+        if (!device.stpConfig) {
+          return { output: 'Spanning Tree Protocol is not enabled on this device', success: true };
+        }
+
+        let output = 'Interface      Role        State      Cost    Prio.Nbr\n';
+        output += '───────────────────────────────────────────────────────\n';
+
+        for (const port of device.stpConfig.ports) {
+          const iface = device.interfaces.find((i) => i.id === port.interfaceId);
+          const name = (iface?.name || port.interfaceName).padEnd(15);
+          const role = port.role.padEnd(12);
+          const state = port.state.padEnd(11);
+          const cost = port.pathCost.toString().padEnd(8);
+          const prio = `${port.portPriority}.${port.portId & 0xFF}`;
+          output += `${name}${role}${state}${cost}${prio}\n`;
+        }
+
+        return { output, success: true };
+      }
+
+      if (subCmd === 'spanning-tree detail' || subCmd === 'stp detail') {
+        if (device.type !== 'switch') {
+          return { output: 'Error: STP information is only available on switches', success: false };
+        }
+
+        if (!device.stpConfig) {
+          return { output: 'Spanning Tree Protocol is not enabled on this device', success: true };
+        }
+
+        let output = 'Spanning Tree Port Details\n';
+        output += '═══════════════════════════════════════════════════════════════\n\n';
+
+        for (const port of device.stpConfig.ports) {
+          const iface = device.interfaces.find((i) => i.id === port.interfaceId);
+          output += `Interface ${iface?.name || port.interfaceName}\n`;
+          output += `  Port State:        ${port.state}\n`;
+          output += `  Port Role:         ${port.role}\n`;
+          output += `  Path Cost:         ${port.pathCost}\n`;
+          output += `  Port Priority:     ${port.portPriority}\n`;
+          output += `  Port ID:           ${port.portId}\n`;
+          output += `  Designated Root:   ${port.designatedRoot}\n`;
+          output += `  Designated Cost:   ${port.designatedCost}\n`;
+          output += `  Designated Bridge: ${port.designatedBridge}\n`;
+          output += `  Connected:         ${iface?.connectedTo ? 'Yes' : 'No'}\n`;
+          output += `  Link Up:           ${iface?.isUp ? 'Yes' : 'No'}\n`;
+          output += '\n';
+        }
+
+        return { output, success: true };
+      }
+
       return {
-        output: 'Usage: show [running-config|interfaces|ip route|arp|dhcp leases|dhcp config|vlan|interfaces switchport]',
+        output: 'Usage: show [running-config|interfaces|ip route|arp|dhcp leases|dhcp config|vlan|interfaces switchport|spanning-tree|stp interface|stp detail]',
         success: false,
       };
     },

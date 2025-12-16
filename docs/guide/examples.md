@@ -103,6 +103,29 @@ Enterprise network with core router, two branches, and data center.
 
 ---
 
+### Spanning Tree Protocol - Triangle
+**File:** `stp-triangle.json`  
+**Difficulty:** Intermediate
+
+Three switches in a triangle with redundant links. STP prevents loops.
+
+```
+        [SW1-Root]
+       /          \
+      /            \
+   [SW2]----------[SW3]
+     |      ^       |
+   [PC1]  blocked  [PC2]
+```
+
+**Try:** 
+1. Open terminal on any switch, run `show spanning-tree`
+2. Note SW1 is root (priority 4096)
+3. Run `show stp interface` to see blocked port
+4. Ping PC1 to PC2 - traffic flows through root
+
+---
+
 ### DHCP Server
 **File:** `dhcp-server.json`  
 **Difficulty:** Beginner

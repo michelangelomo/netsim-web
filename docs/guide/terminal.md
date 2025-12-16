@@ -56,11 +56,37 @@ exit
 | `show interfaces` | List all interfaces |
 | `show arp` | Display ARP table |
 | `show mac-address-table` | Display MAC table (switches) |
+| `show vlan` | Display VLAN configuration (switches) |
+| `show spanning-tree` | Display STP status (switches) |
 | `ping <ip>` | Test connectivity |
 | `traceroute <ip>` | Trace packet path |
 | `clear` | Clear terminal screen |
 | `clear arp` | Clear ARP cache |
 | `clear mac-address-table` | Clear MAC table (switches) |
+
+## VLAN Commands (Switches)
+
+| Command | Description |
+|---------|-------------|
+| `vlan <id>` | Create VLAN or enter VLAN config mode |
+| `no vlan <id>` | Delete VLAN |
+| `show vlan` | Display VLAN information |
+| `switchport mode access` | Set port to access mode |
+| `switchport mode trunk` | Set port to trunk mode |
+| `switchport access vlan <id>` | Assign port to VLAN |
+| `switchport trunk allowed vlan <ids>` | Set trunk allowed VLANs |
+| `interface vlan <id>` | Configure SVI for inter-VLAN routing |
+
+## Spanning Tree Commands (Switches)
+
+| Command | Description |
+|---------|-------------|
+| `spanning-tree enable` | Enable STP |
+| `spanning-tree disable` | Disable STP |
+| `spanning-tree priority <value>` | Set bridge priority (0-61440) |
+| `show spanning-tree` | Display STP status |
+| `show stp interface` | Display per-port STP states |
+| `spanning-tree cost <value>` | Set port cost (in interface mode) |
 
 ## Tips
 

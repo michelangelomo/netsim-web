@@ -35,6 +35,8 @@ nav:
       - Adding Devices: guide/devices.md
       - Creating Connections: guide/connections.md
       - Terminal Commands: guide/terminal.md
+      - VLANs: guide/vlans.md
+      - Spanning Tree Protocol: guide/stp.md
   - Reference:
       - CLI Commands: reference/commands.md
       - Device Types: reference/devices.md

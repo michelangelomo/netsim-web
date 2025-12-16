@@ -15,6 +15,11 @@ import type {
   SimulationState,
   DhcpServerConfig,
   DhcpLease,
+  StpConfig,
+  StpPortConfig,
+  StpPortState,
+  StpPortRole,
+  BpduPayload,
 } from '@/types/network';
 import {
   generateMacAddress,
@@ -28,6 +33,40 @@ import {
 import { processDeviceTick, processLinkTick } from '@/lib/simulation';
 
 type DhcpServerMatch = { device: NetworkDevice; config: DhcpServerConfig };
+
+// ============================================
+// STP Helper Functions
+// ============================================
+
+// Create a Bridge ID from priority and MAC address
+function createBridgeId(priority: number, macAddress: string): string {
+  const priorityHex = priority.toString(16).padStart(4, '0');
+  return `${priorityHex}.${macAddress.toLowerCase()}`;
+}
+
+// Compare two Bridge IDs (lower is better, returns negative if a < b)
+function compareBridgeIds(a: string, b: string): number {
+  const [aPriorityStr, aMac] = a.split('.');
+  const [bPriorityStr, bMac] = b.split('.');
+  const aPriority = parseInt(aPriorityStr, 16);
+  const bPriority = parseInt(bPriorityStr, 16);
+
+  if (aPriority !== bPriority) {
+    return aPriority - bPriority;
+  }
+  // Compare MAC addresses lexicographically
+  return aMac.localeCompare(bMac);
+}
+
+// Calculate path cost based on interface speed (IEEE 802.1D-2004)
+function calculatePathCost(speed: number): number {
+  // speed is in Mbps
+  if (speed >= 10000) return 2;      // 10 Gbps
+  if (speed >= 1000) return 4;       // 1 Gbps
+  if (speed >= 100) return 19;       // 100 Mbps
+  if (speed >= 10) return 100;       // 10 Mbps
+  return 200;                         // Default
+}
 
 function getDhcpServers(device: NetworkDevice): DhcpServerConfig[] {
   const current = device.dhcpServers;
@@ -197,6 +236,15 @@ interface NetworkStore {
   addSvi: (deviceId: string, svi: { vlanId: number; ipAddress?: string; subnetMask?: string; isUp: boolean }) => boolean;
   removeSvi: (deviceId: string, vlanId: number) => boolean;
   updateInterface: (deviceId: string, interfaceId: string, updates: Partial<NetworkInterface>) => void;
+
+  // Actions - STP (Spanning Tree Protocol)
+  enableStp: (deviceId: string) => void;
+  disableStp: (deviceId: string) => void;
+  setStpBridgePriority: (deviceId: string, priority: number) => void;
+  setStpPortCost: (deviceId: string, interfaceId: string, cost: number) => void;
+  setStpPortPriority: (deviceId: string, interfaceId: string, priority: number) => void;
+  runStpConvergence: () => void;
+  generateStpBpdus: (deviceId: string) => Packet[];
 
   // Actions - DHCP
   configureDhcpServer: (deviceId: string, interfaceId: string, config: Partial<DhcpServerConfig>) => void;
@@ -1355,6 +1403,407 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
         };
       }),
     }));
+  },
+
+  // ============================================
+  // STP (Spanning Tree Protocol) Implementation
+  // ============================================
+
+  enableStp: (deviceId) => {
+    const device = get().getDeviceById(deviceId);
+    if (!device || device.type !== 'switch') return;
+
+    // Create Bridge ID: priority (4 hex digits) + MAC address
+    const bridgePriority = 32768; // Default priority
+    const bridgeMac = device.interfaces[0]?.macAddress || '00:00:00:00:00:00';
+    const bridgeId = createBridgeId(bridgePriority, bridgeMac);
+
+    // Initialize port configurations
+    const ports: StpPortConfig[] = device.interfaces.map((iface, index) => ({
+      interfaceId: iface.id,
+      interfaceName: iface.name,
+      state: 'blocking' as StpPortState,
+      role: 'disabled' as StpPortRole,
+      pathCost: calculatePathCost(iface.speed),
+      portPriority: 128, // Default port priority
+      portId: (128 << 8) | (index + 1), // priority (8 bits) + port number (8 bits)
+      designatedRoot: bridgeId,
+      designatedCost: 0,
+      designatedBridge: bridgeId,
+      designatedPort: 0,
+      forwardDelay: 15,
+      messageAge: 0,
+      maxAge: 20,
+      helloTime: 2,
+    }));
+
+    const stpConfig: StpConfig = {
+      enabled: true,
+      bridgePriority,
+      bridgeId,
+      rootBridgeId: bridgeId, // Initially, assume we are root
+      rootPathCost: 0,
+      rootPort: undefined,
+      maxAge: 20,
+      helloTime: 2,
+      forwardDelay: 15,
+      topologyChangeCount: 0,
+      lastTopologyChange: undefined,
+      ports,
+    };
+
+    set((state) => ({
+      devices: state.devices.map((d) =>
+        d.id === deviceId ? { ...d, stpConfig } : d
+      ),
+    }));
+
+    get().addNotification({
+      type: 'success',
+      title: 'STP Enabled',
+      message: `Spanning Tree Protocol enabled on ${device.name}`,
+    });
+  },
+
+  disableStp: (deviceId) => {
+    const device = get().getDeviceById(deviceId);
+    if (!device || !device.stpConfig) return;
+
+    // Set all ports to forwarding when STP is disabled
+    const updatedPorts = device.stpConfig.ports.map((port) => ({
+      ...port,
+      state: 'forwarding' as StpPortState,
+      role: 'designated' as StpPortRole,
+    }));
+
+    set((state) => ({
+      devices: state.devices.map((d) =>
+        d.id === deviceId && d.stpConfig
+          ? { ...d, stpConfig: { ...d.stpConfig, enabled: false, ports: updatedPorts } }
+          : d
+      ),
+    }));
+
+    get().addNotification({
+      type: 'info',
+      title: 'STP Disabled',
+      message: `Spanning Tree Protocol disabled on ${device.name}`,
+    });
+  },
+
+  setStpBridgePriority: (deviceId, priority) => {
+    const device = get().getDeviceById(deviceId);
+    if (!device || !device.stpConfig) return;
+
+    // Priority must be a multiple of 4096 (0-61440)
+    const normalizedPriority = Math.min(61440, Math.max(0, Math.floor(priority / 4096) * 4096));
+    const bridgeMac = device.interfaces[0]?.macAddress || '00:00:00:00:00:00';
+    const newBridgeId = createBridgeId(normalizedPriority, bridgeMac);
+
+    set((state) => ({
+      devices: state.devices.map((d) =>
+        d.id === deviceId && d.stpConfig
+          ? {
+            ...d,
+            stpConfig: {
+              ...d.stpConfig,
+              bridgePriority: normalizedPriority,
+              bridgeId: newBridgeId,
+            },
+          }
+          : d
+      ),
+    }));
+  },
+
+  setStpPortCost: (deviceId, interfaceId, cost) => {
+    const device = get().getDeviceById(deviceId);
+    if (!device || !device.stpConfig) return;
+
+    set((state) => ({
+      devices: state.devices.map((d) =>
+        d.id === deviceId && d.stpConfig
+          ? {
+            ...d,
+            stpConfig: {
+              ...d.stpConfig,
+              ports: d.stpConfig.ports.map((p) =>
+                p.interfaceId === interfaceId ? { ...p, pathCost: cost } : p
+              ),
+            },
+          }
+          : d
+      ),
+    }));
+  },
+
+  setStpPortPriority: (deviceId, interfaceId, priority) => {
+    const device = get().getDeviceById(deviceId);
+    if (!device || !device.stpConfig) return;
+
+    const normalizedPriority = Math.min(255, Math.max(0, priority));
+
+    set((state) => ({
+      devices: state.devices.map((d) =>
+        d.id === deviceId && d.stpConfig
+          ? {
+            ...d,
+            stpConfig: {
+              ...d.stpConfig,
+              ports: d.stpConfig.ports.map((p) => {
+                if (p.interfaceId !== interfaceId) return p;
+                const portIndex = d.stpConfig!.ports.indexOf(p);
+                return {
+                  ...p,
+                  portPriority: normalizedPriority,
+                  portId: (normalizedPriority << 8) | (portIndex + 1),
+                };
+              }),
+            },
+          }
+          : d
+      ),
+    }));
+  },
+
+  runStpConvergence: () => {
+    const { devices, connections } = get();
+
+    // Get all STP-enabled switches
+    const stpSwitches = devices.filter(
+      (d) => d.type === 'switch' && d.stpConfig?.enabled
+    );
+
+    if (stpSwitches.length === 0) return;
+
+    // Phase 1: Each switch starts by assuming it's the root
+    for (const sw of stpSwitches) {
+      if (!sw.stpConfig) continue;
+      get().updateDevice(sw.id, {
+        stpConfig: {
+          ...sw.stpConfig,
+          rootBridgeId: sw.stpConfig.bridgeId,
+          rootPathCost: 0,
+          rootPort: undefined,
+        },
+      });
+    }
+
+    // Phase 2: Simulate BPDU exchange until convergence
+    let converged = false;
+    let iterations = 0;
+    const maxIterations = stpSwitches.length * 3; // Safety limit
+
+    while (!converged && iterations < maxIterations) {
+      converged = true;
+      iterations++;
+
+      for (const sw of stpSwitches) {
+        const currentDevice = get().getDeviceById(sw.id);
+        if (!currentDevice?.stpConfig) continue;
+
+        // Check each connected port
+        for (const iface of currentDevice.interfaces) {
+          if (!iface.isUp || !iface.connectedTo) continue;
+
+          // Find the connection and neighbor
+          const conn = connections.find(
+            (c) =>
+              (c.sourceInterfaceId === iface.id || c.targetInterfaceId === iface.id) &&
+              c.isUp
+          );
+          if (!conn) continue;
+
+          const neighborDeviceId =
+            conn.sourceDeviceId === currentDevice.id
+              ? conn.targetDeviceId
+              : conn.sourceDeviceId;
+
+          const neighbor = get().getDeviceById(neighborDeviceId);
+          if (!neighbor?.stpConfig?.enabled) continue;
+
+          // Get port config
+          const portConfig = currentDevice.stpConfig.ports.find(
+            (p) => p.interfaceId === iface.id
+          );
+          if (!portConfig) continue;
+
+          // Calculate potential root path through this neighbor
+          const neighborRootCost =
+            neighbor.stpConfig.rootPathCost + portConfig.pathCost;
+
+          // Compare with current root knowledge
+          const currentStpConfig = get().getDeviceById(currentDevice.id)?.stpConfig;
+          if (!currentStpConfig) continue;
+
+          // Check if neighbor has better root info
+          const neighborBetter =
+            compareBridgeIds(neighbor.stpConfig.rootBridgeId, currentStpConfig.rootBridgeId) < 0 ||
+            (neighbor.stpConfig.rootBridgeId === currentStpConfig.rootBridgeId &&
+              neighborRootCost < currentStpConfig.rootPathCost);
+
+          if (neighborBetter) {
+            converged = false;
+            get().updateDevice(currentDevice.id, {
+              stpConfig: {
+                ...currentStpConfig,
+                rootBridgeId: neighbor.stpConfig.rootBridgeId,
+                rootPathCost: neighborRootCost,
+                rootPort: iface.id,
+              },
+            });
+          }
+        }
+      }
+    }
+
+    // Phase 3: Assign port roles and states
+    for (const sw of stpSwitches) {
+      const currentDevice = get().getDeviceById(sw.id);
+      if (!currentDevice?.stpConfig) continue;
+
+      const isRoot = currentDevice.stpConfig.rootBridgeId === currentDevice.stpConfig.bridgeId;
+
+      const updatedPorts = currentDevice.stpConfig.ports.map((port) => {
+        const iface = currentDevice.interfaces.find((i) => i.id === port.interfaceId);
+
+        // Check if interface is disabled or not connected
+        if (!iface?.isUp) {
+          return { ...port, state: 'disabled' as StpPortState, role: 'disabled' as StpPortRole };
+        }
+
+        if (!iface.connectedTo) {
+          // Unconnected ports are designated and forwarding on root, disabled otherwise
+          return {
+            ...port,
+            state: 'forwarding' as StpPortState,
+            role: 'designated' as StpPortRole,
+          };
+        }
+
+        // Check if this is the root port
+        if (port.interfaceId === currentDevice.stpConfig!.rootPort) {
+          return { ...port, state: 'forwarding' as StpPortState, role: 'root' as StpPortRole };
+        }
+
+        // For root bridge, all ports are designated
+        if (isRoot) {
+          return { ...port, state: 'forwarding' as StpPortState, role: 'designated' as StpPortRole };
+        }
+
+        // Find neighbor to determine if we should be designated or alternate
+        const conn = connections.find(
+          (c) =>
+            (c.sourceInterfaceId === port.interfaceId ||
+              c.targetInterfaceId === port.interfaceId) &&
+            c.isUp
+        );
+
+        if (conn) {
+          const neighborDeviceId =
+            conn.sourceDeviceId === currentDevice.id
+              ? conn.targetDeviceId
+              : conn.sourceDeviceId;
+
+          const neighbor = get().getDeviceById(neighborDeviceId);
+          if (neighbor?.stpConfig?.enabled) {
+            // Find neighbor's port for this connection
+            const neighborInterfaceId =
+              conn.sourceDeviceId === currentDevice.id
+                ? conn.targetInterfaceId
+                : conn.sourceInterfaceId;
+
+            const neighborPort = neighbor.stpConfig.ports.find(
+              (p) => p.interfaceId === neighborInterfaceId
+            );
+
+            // Determine if we are designated for this segment
+            // Designated bridge is the one with lower root path cost, or lower bridge ID on tie
+            const weAreDesignated =
+              currentDevice.stpConfig!.rootPathCost < neighbor.stpConfig.rootPathCost ||
+              (currentDevice.stpConfig!.rootPathCost === neighbor.stpConfig.rootPathCost &&
+                compareBridgeIds(currentDevice.stpConfig!.bridgeId, neighbor.stpConfig.bridgeId) < 0);
+
+            // Check if neighbor's port is their root port (we'd be designated then)
+            const neighborIsRootPort = neighborPort?.role === 'root';
+
+            if (weAreDesignated || neighborIsRootPort) {
+              return { ...port, state: 'forwarding' as StpPortState, role: 'designated' as StpPortRole };
+            } else {
+              // We are alternate (blocking)
+              return { ...port, state: 'blocking' as StpPortState, role: 'alternate' as StpPortRole };
+            }
+          }
+        }
+
+        // Default to forwarding for edge ports (connected to non-STP devices)
+        return { ...port, state: 'forwarding' as StpPortState, role: 'designated' as StpPortRole };
+      });
+
+      get().updateDevice(currentDevice.id, {
+        stpConfig: {
+          ...currentDevice.stpConfig,
+          ports: updatedPorts,
+          topologyChangeCount: currentDevice.stpConfig.topologyChangeCount + 1,
+          lastTopologyChange: Date.now(),
+        },
+      });
+    }
+  },
+
+  generateStpBpdus: (deviceId) => {
+    const device = get().getDeviceById(deviceId);
+    if (!device?.stpConfig?.enabled) return [];
+
+    const bpdus: Packet[] = [];
+    const STP_MULTICAST_MAC = '01:80:C2:00:00:00';
+
+    for (const port of device.stpConfig.ports) {
+      // Only send BPDUs on designated and root ports
+      if (port.state !== 'forwarding' && port.state !== 'learning') continue;
+
+      const iface = device.interfaces.find((i) => i.id === port.interfaceId);
+      if (!iface?.connectedTo) continue;
+
+      const bpduPayload: BpduPayload = {
+        protocolId: 0,
+        version: 0, // STP (not RSTP)
+        bpduType: 'config',
+        flags: {
+          topologyChange: false,
+          topologyChangeAck: false,
+        },
+        rootBridgeId: device.stpConfig.rootBridgeId,
+        rootPathCost: device.stpConfig.rootPathCost,
+        senderBridgeId: device.stpConfig.bridgeId,
+        senderPortId: port.portId,
+        messageAge: 0,
+        maxAge: device.stpConfig.maxAge,
+        helloTime: device.stpConfig.helloTime,
+        forwardDelay: device.stpConfig.forwardDelay,
+      };
+
+      const bpdu: Packet = {
+        id: uuidv4(),
+        type: 'stp',
+        sourceMAC: iface.macAddress,
+        destMAC: STP_MULTICAST_MAC,
+        ttl: 1, // BPDUs don't go beyond L2
+        size: 35, // BPDU size
+        currentDeviceId: deviceId,
+        sourceDeviceId: deviceId,
+        processingStage: 'at-device',
+        path: [deviceId],
+        currentPathIndex: 0,
+        progress: 0,
+        payload: bpduPayload,
+        egressInterface: iface.name,
+      };
+
+      bpdus.push(bpdu);
+    }
+
+    return bpdus;
   },
 
   // DHCP

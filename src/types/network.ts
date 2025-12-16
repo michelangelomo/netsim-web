@@ -66,6 +66,71 @@ export interface MacTableEntry {
   age: number;
 }
 
+// ============================================
+// STP (Spanning Tree Protocol) Types
+// ============================================
+
+// STP port states (IEEE 802.1D)
+export type StpPortState = 'disabled' | 'blocking' | 'listening' | 'learning' | 'forwarding';
+
+// STP port roles
+export type StpPortRole = 'root' | 'designated' | 'alternate' | 'backup' | 'disabled';
+
+// STP port configuration for each interface
+export interface StpPortConfig {
+  interfaceId: string;
+  interfaceName: string;
+  state: StpPortState;
+  role: StpPortRole;
+  pathCost: number;           // Port path cost (based on link speed)
+  portPriority: number;       // Port priority (0-255, default 128)
+  portId: number;             // Unique port identifier
+  designatedRoot: string;     // Bridge ID of the root bridge (for this port)
+  designatedCost: number;     // Cost to reach root via this port
+  designatedBridge: string;   // Bridge ID of the designated bridge
+  designatedPort: number;     // Port ID of the designated port
+  forwardDelay: number;       // Forward delay timer (default 15s)
+  messageAge: number;         // Age of the last BPDU received
+  maxAge: number;             // Maximum BPDU age (default 20s)
+  helloTime: number;          // Hello time (default 2s)
+  lastBpduTime?: number;      // Timestamp of last BPDU received
+}
+
+// BPDU (Bridge Protocol Data Unit) payload
+export interface BpduPayload {
+  protocolId: number;         // Always 0 for STP
+  version: number;            // 0 for STP, 2 for RSTP
+  bpduType: 'config' | 'tcn'; // Configuration BPDU or Topology Change Notification
+  flags: {
+    topologyChange: boolean;
+    topologyChangeAck: boolean;
+  };
+  rootBridgeId: string;       // Bridge ID of the root bridge
+  rootPathCost: number;       // Cost to reach the root
+  senderBridgeId: string;     // Bridge ID of the sending bridge
+  senderPortId: number;       // Port ID of the sending port
+  messageAge: number;         // Age of this BPDU
+  maxAge: number;             // Maximum age before discard
+  helloTime: number;          // Hello interval
+  forwardDelay: number;       // Forward delay
+}
+
+// STP configuration for a switch
+export interface StpConfig {
+  enabled: boolean;
+  bridgePriority: number;     // Bridge priority (0-65535, default 32768)
+  bridgeId: string;           // Bridge ID = priority + MAC address
+  rootBridgeId: string;       // Current root bridge ID
+  rootPathCost: number;       // Cost to reach root
+  rootPort?: string;          // Interface ID of the root port (undefined if this is root)
+  maxAge: number;             // Maximum BPDU age (default 20s)
+  helloTime: number;          // Hello interval (default 2s)
+  forwardDelay: number;       // Forward delay (default 15s)
+  topologyChangeCount: number;
+  lastTopologyChange?: number; // Timestamp of last topology change
+  ports: StpPortConfig[];     // Per-port STP configuration
+}
+
 // DHCP lease
 export interface DhcpLease {
   ipAddress: string;
@@ -149,6 +214,7 @@ export interface NetworkDevice {
   macTable?: MacTableEntry[]; // For switches
   vlans?: VLAN[]; // For switches - configured VLANs
   sviInterfaces?: SVIInterface[]; // For switches - Layer 3 VLAN interfaces
+  stpConfig?: StpConfig; // For switches - Spanning Tree Protocol configuration
   dhcpServers?: DhcpServerConfig[]; // For routers/servers (per-interface)
   dnsServer?: DnsServerConfig; // For DNS servers
   firewallRules?: FirewallRule[];

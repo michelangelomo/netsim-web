@@ -1,0 +1,180 @@
+{
+    "name": "Spanning Tree Protocol - Triangle Topology",
+    "description": "Three switches in a triangle with redundant links. STP prevents loops by blocking one path.",
+    "devices": [
+        {
+            "id": "switch-1",
+            "name": "SW1-Root",
+            "type": "switch",
+            "x": 400,
+            "y": 100,
+            "interfaces": [
+                {
+                    "id": "gi0/0",
+                    "name": "GigabitEthernet0/0",
+                    "type": "ethernet",
+                    "speed": 1000
+                },
+                {
+                    "id": "gi0/1",
+                    "name": "GigabitEthernet0/1",
+                    "type": "ethernet",
+                    "speed": 1000
+                }
+            ],
+            "stpConfig": {
+                "enabled": true,
+                "priority": 4096,
+                "helloTime": 2,
+                "maxAge": 20,
+                "forwardDelay": 15
+            }
+        },
+        {
+            "id": "switch-2",
+            "name": "SW2",
+            "type": "switch",
+            "x": 200,
+            "y": 300,
+            "interfaces": [
+                {
+                    "id": "gi0/0",
+                    "name": "GigabitEthernet0/0",
+                    "type": "ethernet",
+                    "speed": 1000
+                },
+                {
+                    "id": "gi0/1",
+                    "name": "GigabitEthernet0/1",
+                    "type": "ethernet",
+                    "speed": 1000
+                },
+                {
+                    "id": "gi0/2",
+                    "name": "GigabitEthernet0/2",
+                    "type": "ethernet",
+                    "speed": 1000
+                }
+            ],
+            "stpConfig": {
+                "enabled": true,
+                "priority": 32768,
+                "helloTime": 2,
+                "maxAge": 20,
+                "forwardDelay": 15
+            }
+        },
+        {
+            "id": "switch-3",
+            "name": "SW3",
+            "type": "switch",
+            "x": 600,
+            "y": 300,
+            "interfaces": [
+                {
+                    "id": "gi0/0",
+                    "name": "GigabitEthernet0/0",
+                    "type": "ethernet",
+                    "speed": 1000
+                },
+                {
+                    "id": "gi0/1",
+                    "name": "GigabitEthernet0/1",
+                    "type": "ethernet",
+                    "speed": 1000
+                },
+                {
+                    "id": "gi0/2",
+                    "name": "GigabitEthernet0/2",
+                    "type": "ethernet",
+                    "speed": 1000
+                }
+            ],
+            "stpConfig": {
+                "enabled": true,
+                "priority": 32768,
+                "helloTime": 2,
+                "maxAge": 20,
+                "forwardDelay": 15
+            }
+        },
+        {
+            "id": "pc-1",
+            "name": "PC1",
+            "type": "pc",
+            "x": 100,
+            "y": 450,
+            "interfaces": [
+                {
+                    "id": "eth0",
+                    "name": "Ethernet0",
+                    "type": "ethernet",
+                    "speed": 1000,
+                    "ip": "192.168.1.10",
+                    "subnet": "255.255.255.0",
+                    "gateway": "192.168.1.1"
+                }
+            ]
+        },
+        {
+            "id": "pc-2",
+            "name": "PC2",
+            "type": "pc",
+            "x": 700,
+            "y": 450,
+            "interfaces": [
+                {
+                    "id": "eth0",
+                    "name": "Ethernet0",
+                    "type": "ethernet",
+                    "speed": 1000,
+                    "ip": "192.168.1.20",
+                    "subnet": "255.255.255.0",
+                    "gateway": "192.168.1.1"
+                }
+            ]
+        }
+    ],
+    "connections": [
+        {
+            "id": "conn-1",
+            "name": "SW1-SW2 Link",
+            "sourceDeviceId": "switch-1",
+            "sourceInterfaceId": "gi0/0",
+            "targetDeviceId": "switch-2",
+            "targetInterfaceId": "gi0/0"
+        },
+        {
+            "id": "conn-2",
+            "name": "SW1-SW3 Link",
+            "sourceDeviceId": "switch-1",
+            "sourceInterfaceId": "gi0/1",
+            "targetDeviceId": "switch-3",
+            "targetInterfaceId": "gi0/0"
+        },
+        {
+            "id": "conn-3",
+            "name": "SW2-SW3 Link (Blocked by STP)",
+            "sourceDeviceId": "switch-2",
+            "sourceInterfaceId": "gi0/1",
+            "targetDeviceId": "switch-3",
+            "targetInterfaceId": "gi0/1"
+        },
+        {
+            "id": "conn-4",
+            "name": "PC1-SW2",
+            "sourceDeviceId": "pc-1",
+            "sourceInterfaceId": "eth0",
+            "targetDeviceId": "switch-2",
+            "targetInterfaceId": "gi0/2"
+        },
+        {
+            "id": "conn-5",
+            "name": "PC2-SW3",
+            "sourceDeviceId": "pc-2",
+            "sourceInterfaceId": "eth0",
+            "targetDeviceId": "switch-3",
+            "targetInterfaceId": "gi0/2"
+        }
+    ]
+}

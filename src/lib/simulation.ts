@@ -8,6 +8,7 @@ import type {
     RouteEntry,
     NetworkInterface,
     FirewallRule,
+    StpPortConfig,
 } from '@/types/network';
 import {
     isSameNetwork,
@@ -117,6 +118,40 @@ function addToPath(packet: Packet, deviceId: string): string[] {
         return [...path, deviceId];
     }
     return path;
+}
+
+// STP Constants
+const STP_MULTICAST_MAC = '01:80:C2:00:00:00';
+
+// Check if a packet is a BPDU (always allowed through regardless of STP state)
+function isBpduPacket(packet: Packet): boolean {
+    return packet.type === 'stp' || packet.destMAC.toLowerCase() === STP_MULTICAST_MAC.toLowerCase();
+}
+
+// Get STP port config for an interface
+function getStpPortConfig(device: NetworkDevice, interfaceId: string): StpPortConfig | undefined {
+    return device.stpConfig?.ports.find((p) => p.interfaceId === interfaceId);
+}
+
+// Check if a port allows forwarding user traffic (STP state check)
+function isPortForwarding(device: NetworkDevice, interfaceId: string): boolean {
+    // If STP is not enabled, all ports forward
+    if (!device.stpConfig?.enabled) return true;
+
+    const portConfig = getStpPortConfig(device, interfaceId);
+    if (!portConfig) return true; // Unknown port, allow traffic
+
+    return portConfig.state === 'forwarding';
+}
+
+// Check if a port allows learning MAC addresses
+function isPortLearning(device: NetworkDevice, interfaceId: string): boolean {
+    if (!device.stpConfig?.enabled) return true;
+
+    const portConfig = getStpPortConfig(device, interfaceId);
+    if (!portConfig) return true;
+
+    return portConfig.state === 'learning' || portConfig.state === 'forwarding';
 }
 
 // Process packet at device
@@ -451,6 +486,15 @@ function processSwitchLogic(
     const effectiveIngressInterface = ingressInterface ||
         (packet.ingressInterface ? device.interfaces.find(i => i.name === packet.ingressInterface) : null);
 
+    // STP Check: If ingress port is blocking and this is not a BPDU, drop packet
+    if (effectiveIngressInterface && !isBpduPacket(packet)) {
+        const ingressInterfaceIdForStp = effectiveIngressInterface.id;
+        if (!isPortForwarding(device, ingressInterfaceIdForStp)) {
+            // Port is blocking - drop non-BPDU traffic
+            return [];
+        }
+    }
+
     // 1. Determine VLAN for this frame
     let frameVlan: number;
     if (effectiveIngressInterface) {
@@ -468,8 +512,8 @@ function processSwitchLogic(
         frameVlan = 1;
     }
 
-    // 2. Learn MAC with VLAN
-    if (effectiveIngressInterface) {
+    // 2. Learn MAC with VLAN (only if port is in learning or forwarding state)
+    if (effectiveIngressInterface && isPortLearning(device, effectiveIngressInterface.id)) {
         const macTable = device.macTable || [];
         // Look for existing entry with same MAC and VLAN
         const existingEntryIndex = macTable.findIndex(
@@ -504,15 +548,22 @@ function processSwitchLogic(
     const destMac = packet.destMAC;
     let targetPorts: string[] = [];
 
+    // Helper to check if port is allowed for forwarding (VLAN + STP)
+    const portCanForward = (i: NetworkInterface): boolean => {
+        if (!i.isUp || !i.connectedTo) return false;
+        if (!portAllowsVlan(i, frameVlan)) return false;
+        // STP check: only forward on ports in forwarding state (unless BPDU)
+        if (!isBpduPacket(packet) && !isPortForwarding(device, i.id)) return false;
+        return true;
+    };
+
     if (isBroadcastMAC(destMac) || isMulticastMAC(destMac)) {
-        // Flood to all ports in the same VLAN except ingress
+        // Flood to all ports in the same VLAN except ingress (respecting STP)
         targetPorts = device.interfaces
             .filter((i) =>
-                i.isUp &&
-                i.connectedTo &&
                 i.id !== ingressInterfaceId &&
                 i.name !== effectiveIngressInterface?.name &&
-                portAllowsVlan(i, frameVlan)
+                portCanForward(i)
             )
             .map((i) => i.name);
     } else {
@@ -527,16 +578,20 @@ function processSwitchLogic(
                 // Drop if dest is on same port (filtering)
                 return [];
             }
-            targetPorts = [entry.port];
+            // Check if the egress port can forward
+            const egressIface = device.interfaces.find((i) => i.name === entry.port);
+            if (egressIface && portCanForward(egressIface)) {
+                targetPorts = [entry.port];
+            } else {
+                targetPorts = []; // Port is blocking, drop packet
+            }
         } else {
-            // Unknown unicast -> Flood within VLAN
+            // Unknown unicast -> Flood within VLAN (respecting STP)
             targetPorts = device.interfaces
                 .filter((i) =>
-                    i.isUp &&
-                    i.connectedTo &&
                     i.id !== ingressInterfaceId &&
                     i.name !== effectiveIngressInterface?.name &&
-                    portAllowsVlan(i, frameVlan)
+                    portCanForward(i)
                 )
                 .map((i) => i.name);
         }

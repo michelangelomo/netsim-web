@@ -4,105 +4,100 @@
 
 This document analyzes the current network simulator implementation, identifies implementation issues, and outlines missing features needed for a realistic network simulation. The codebase has a solid foundation but requires improvements in protocol accuracy, simulation fidelity, and feature completeness.
 
+
+## IMPORTANT NOTE!
+
+Every implementations must use TDD approach.
+
 ---
 
 ## Part 1: Implementation Issues (Bugs & Incorrect Behavior)
 
 ### 1.1 ARP Protocol Issues
 
-#### Issue: Hardcoded Interface in ARP Learning
-**Location:** `src/lib/simulation.ts` lines 258-265
-```typescript
-const entry: ArpEntry = {
-    ipAddress: payload.senderIP,
-    macAddress: packet.sourceMAC,
-    interface: 'eth0', // TODO: deduce real interface  ← BUG
-    type: 'dynamic',
-    age: 0,
-};
-```
-**Problem:** The interface is hardcoded to `'eth0'` instead of determining the actual ingress interface.
-**Impact:** Incorrect ARP table entries on multi-interface devices (routers).
-**Fix:** Use the `ingressInterface?.name` which is already computed above.
+#### ✅ FIXED: Hardcoded Interface in ARP Learning
+**Location:** `src/lib/simulation.ts` line 687
+**Solution:** Now uses `ingressInterface?.name || device.interfaces[0]?.name || 'eth0'`
+**Status:** Fixed and tested in `phase1-fixes.test.ts`
 
-#### Issue: ARP Request Flooding on L2 Devices
-**Location:** `src/lib/simulation.ts`
-**Problem:** ARP requests sent as broadcast (`FF:FF:FF:FF:FF:FF`) should be flooded by switches to all ports except ingress, but the switch logic and ARP sending logic are not properly integrated.
-**Impact:** ARP resolution may fail across switches in some topologies.
+#### ✅ FIXED: ARP Request Flooding on L2 Devices
+**Location:** `src/lib/simulation.ts` - `processSwitchLogic`
+**Solution:** Switches now properly flood broadcasts (including ARP requests) to all ports in the same VLAN except ingress.
+**Status:** Working correctly with VLAN awareness.
 
-#### Issue: Missing ARP Timeout/Aging
-**Location:** `src/types/network.ts`, `src/store/network-store.ts`
-**Problem:** ARP entries have an `age` field but no mechanism ages or expires entries.
-**Impact:** Stale ARP entries never expire, which is unrealistic.
-**Fix:** Add a periodic timer in the simulation tick to age ARP entries and remove expired ones.
+#### ⏸️ DEFERRED: ARP Timeout/Aging
+**Location:** `src/store/network-store.ts`
+**Decision:** Automatic aging is intentionally disabled for better UX in a learning simulator. Users can manually clear tables via `clear arp` or `clear mac-address-table` commands, or tables are cleared when simulation stops.
+**Status:** Design decision - not a bug.
 
 ---
 
 ### 1.2 Routing Issues
 
-#### Issue: TTL Not Decremented for Locally Generated Packets Correctly
-**Location:** `src/lib/simulation.ts` lines 463-465
-**Problem:** The `isLocallyGenerated` check relies on `!packet.lastDeviceId`, which may not be reliable in all scenarios.
-**Impact:** TTL may be incorrectly decremented or not decremented.
-**Recommendation:** Add an explicit `isLocallyGenerated` flag to packets.
+#### ✅ FIXED: TTL Not Decremented for Locally Generated Packets Correctly
+**Location:** `src/lib/simulation.ts` lines 658-659, 982
+**Solution:** Added explicit `isLocallyGenerated` flag to `Packet` type. TTL is only decremented when `isLocallyGenerated === false`.
+**Status:** Fixed and tested in `phase1-fixes.test.ts`
 
-#### Issue: ICMP Destination Unreachable Not Implemented
-**Location:** `src/lib/simulation.ts`
-**Problem:** When routing fails (no route to host), the packet is silently dropped instead of generating ICMP Destination Unreachable (Type 3).
-**Impact:** Unrealistic behavior; real networks send ICMP errors.
-**Fix:** Generate ICMP Type 3 Code 0 (Network Unreachable) or Code 1 (Host Unreachable) when appropriate.
+#### ✅ FIXED: ICMP Destination Unreachable Not Implemented
+**Location:** `src/lib/simulation.ts` lines 927-967
+**Solution:** Now generates ICMP Type 3 Code 0 (Network Unreachable) when no route exists. Includes original packet info in payload.
+**Status:** Fixed and tested in `phase1-fixes.test.ts`
+
+#### ✅ FIXED: ICMP Time Exceeded
+**Location:** `src/lib/simulation.ts` lines 846-884
+**Solution:** Now generates ICMP Type 11 Code 0 (TTL Exceeded in Transit) when packet TTL reaches 1 at a router.
+**Status:** Fixed and tested in `simulation.test.ts`
 
 #### Issue: Connected Routes Not Automatically Added for All Device Types
-**Location:** `src/store/network-store.ts` lines 541-551
+**Location:** `src/store/network-store.ts`
 **Problem:** Connected routes are only auto-added for routers and firewalls when configuring interfaces, but servers with routing capability won't get them.
 **Impact:** Servers acting as routers won't have proper routing tables.
+**Status:** Low priority - servers typically don't route.
 
 ---
 
 ### 1.3 Switch/L2 Issues
 
-#### Issue: MAC Table Aging Not Implemented
-**Location:** `src/lib/simulation.ts`, `src/store/network-store.ts`
-**Problem:** MAC table entries have an `age` field but entries never age out.
-**Impact:** MAC tables grow indefinitely and never reflect network changes.
-**Fix:** Add aging mechanism (default 300 seconds) and remove stale entries.
+#### ⏸️ DEFERRED: MAC Table Aging Not Implemented
+**Location:** `src/store/network-store.ts`
+**Decision:** Same as ARP aging - intentionally disabled for learning simulator UX. Users can clear via `clear mac-address-table` command.
+**Status:** Design decision - not a bug.
 
-#### Issue: VLAN Support is Incomplete
-**Location:** `src/types/network.ts`, `src/lib/simulation.ts`
-**Problem:** VLAN field exists on interfaces and MAC table entries, but:
-- No VLAN tagging/untagging logic
-- No trunk/access port distinction
-- No 802.1Q frame handling
-**Impact:** VLANs are non-functional despite UI presence.
+#### ✅ FIXED: VLAN Support is Incomplete
+**Location:** `src/lib/simulation.ts`, `src/types/network.ts`
+**Solution:** Complete 802.1Q VLAN implementation:
+- Access vs trunk port modes with `vlanMode`, `accessVlan`, `allowedVlans`, `nativeVlan`
+- VLAN tagging/untagging in `processEgressVlan()`
+- VLAN-aware MAC learning in `processSwitchLogic()`
+- SVI (Switch Virtual Interfaces) for inter-VLAN routing
+- Comprehensive test coverage in `vlan.test.ts` (49 tests)
+**Status:** Complete
 
 #### Issue: STP (Spanning Tree Protocol) Not Implemented
 **Location:** N/A
 **Problem:** No loop prevention mechanism exists.
 **Impact:** Network loops cause broadcast storms (infinite packet flooding).
-**Severity:** Critical for realistic simulation.
+**Status:** Still needed for realistic simulation.
 
 ---
 
 ### 1.4 Packet Processing Issues
 
-#### Issue: Placeholder MAC Detection is Fragile
-**Location:** `src/lib/simulation.ts` lines 241-242
-```typescript
-const isPlaceholderMAC = packet.destMAC === '00:00:00:00:00:00';
-```
-**Problem:** Using `00:00:00:00:00:00` as a placeholder is a workaround for the packet generation flow.
-**Impact:** May conflict with actual null MAC scenarios.
-**Fix:** Add a proper `needsRouting` or `isOutbound` flag to packets.
+#### ✅ MITIGATED: Placeholder MAC Detection is Fragile
+**Location:** `src/lib/simulation.ts` line 661
+**Solution:** The `isLocallyGenerated` flag now provides a more reliable way to detect packets that need routing. The placeholder MAC (`00:00:00:00:00:00`) is still used but combined with `isLocallyGenerated` check for robustness.
+**Status:** Acceptable - works well in practice.
 
-#### Issue: Buffered Packets May Starve
-**Location:** `src/store/network-store.ts` lines 660-675
-**Problem:** Buffered packets waiting for ARP only get checked once per tick. If ARP resolution completes but the packet processing order misses it, packets may wait longer than necessary.
-**Impact:** Increased latency for packets requiring ARP.
+#### ✅ FIXED: Buffered Packets May Starve
+**Location:** `src/store/network-store.ts` - `tick()` function
+**Solution:** After processing all packets, the tick function now checks for awakened packets whose ARP has been resolved and transitions them from 'buffered' to 'at-device'.
+**Status:** Fixed
 
-#### Issue: Packet Path History Not Updated
-**Location:** `src/lib/simulation.ts`
-**Problem:** Packets have `path: string[]` and `currentPathIndex` fields but these are never populated during simulation.
-**Impact:** Debugging and visualization of packet paths is broken.
+#### ✅ FIXED: Packet Path History Not Updated
+**Location:** `src/lib/simulation.ts` - `addToPath()` function
+**Solution:** The `addToPath()` helper function now tracks packet traversal through devices. Called from `processSwitchLogic()`, `processHubLogic()`, and `processL3Logic()`.
+**Status:** Fixed and tested in `phase1-fixes.test.ts`
 
 ---
 
@@ -151,11 +146,15 @@ const isPlaceholderMAC = packet.destMAC === '00:00:00:00:00:00';
 
 ### 1.8 Firewall Issues
 
-#### Issue: Firewall Rules Not Enforced
-**Location:** `src/lib/simulation.ts`
-**Problem:** Firewall rules exist in device config but `processL3Logic` doesn't check them.
-**Impact:** Firewalls behave as routers; no packet filtering.
-**Fix:** Add firewall rule evaluation in packet processing path.
+#### ✅ FIXED: Firewall Rules Not Enforced
+**Location:** `src/lib/simulation.ts` lines 36-111, 785-797
+**Solution:** Full firewall rule evaluation implemented:
+- `matchesIpPattern()` - supports 'any', exact match, and CIDR notation
+- `matchesPortPattern()` - supports '*', 'any', exact match, and port ranges
+- `matchesFirewallRule()` - evaluates rule against packet
+- `evaluateFirewallRules()` - processes rule list with implicit deny at end
+- Integrated into `processL3Logic()` for firewall devices
+**Status:** Fixed and tested in `phase1-fixes.test.ts` (6 tests for firewall rules)
 
 ---
 
@@ -183,14 +182,16 @@ const isPlaceholderMAC = packet.destMAC === '00:00:00:00:00:00';
 - Connection table management
 - Retransmission timeout (simplified)
 
-#### 2.1.3 Complete VLAN Support
+#### ✅ COMPLETE: VLAN Support
 **Priority:** High
 **Description:** IEEE 802.1Q VLAN tagging
-**Components Needed:**
-- Access vs Trunk port modes
-- Native VLAN configuration
-- VLAN tagging/untagging
-- Inter-VLAN routing on routers
+**Components Implemented:**
+- ✅ Access vs Trunk port modes (`vlanMode: 'access' | 'trunk'`)
+- ✅ Native VLAN configuration (`nativeVlan`)
+- ✅ VLAN tagging/untagging (`processEgressVlan()`, `getIngressVlan()`)
+- ✅ Inter-VLAN routing via SVI (Switch Virtual Interfaces)
+- ✅ VLAN-aware MAC learning and forwarding
+**Status:** Complete - 49 tests in `vlan.test.ts`
 
 #### 2.1.4 NAT (Network Address Translation)
 **Priority:** High
@@ -202,14 +203,17 @@ const isPlaceholderMAC = packet.destMAC === '00:00:00:00:00:00';
 - Dynamic NAT with pools
 - PAT (Port Address Translation)
 
-#### 2.1.5 Firewall Rule Enforcement
+#### ✅ COMPLETE: Firewall Rule Enforcement
 **Priority:** High
-**Description:** Stateful packet inspection
-**Components Needed:**
-- Rule matching engine
-- Connection tracking for stateful inspection
-- Implicit deny at end of ruleset
-- Logging of matched rules
+**Description:** Stateless packet filtering (stateful inspection is future enhancement)
+**Components Implemented:**
+- ✅ Rule matching engine (protocol, source/dest IP, source/dest port)
+- ✅ IP pattern matching (any, exact, CIDR)
+- ✅ Port pattern matching (any, exact, ranges)
+- ✅ Implicit deny at end of ruleset
+- ☐ Connection tracking for stateful inspection (future)
+- ☐ Logging of matched rules (future)
+**Status:** Basic enforcement complete - 6 tests in `phase1-fixes.test.ts`
 
 ---
 
@@ -223,13 +227,17 @@ const isPlaceholderMAC = packet.destMAC === '00:00:00:00:00:00';
 - LACP negotiation packets
 - Load balancing across member links
 
-#### 2.2.2 ICMP Complete Implementation
+#### ✅ MOSTLY COMPLETE: ICMP Implementation
 **Priority:** Medium
-**Current State:** Only Echo Request/Reply and Time Exceeded
-**Missing:**
-- Destination Unreachable (Type 3) - all codes
-- Redirect (Type 5)
-- Parameter Problem (Type 12)
+**Implemented:**
+- ✅ Echo Request (Type 8) / Echo Reply (Type 0)
+- ✅ Time Exceeded (Type 11 Code 0) - TTL expiry
+- ✅ Destination Unreachable (Type 3 Code 0) - Network Unreachable
+**Still Missing:**
+- ☐ Destination Unreachable Code 1 (Host Unreachable)
+- ☐ Destination Unreachable Code 3 (Port Unreachable)
+- ☐ Redirect (Type 5)
+- ☐ Parameter Problem (Type 12)
 
 #### 2.2.3 Dynamic Routing Protocols
 **Priority:** Medium
@@ -314,167 +322,165 @@ const isPlaceholderMAC = packet.destMAC === '00:00:00:00:00:00';
 
 ## Part 3: Implementation Plan
 
-### Phase 1: Bug Fixes (1-2 weeks)
+### ✅ Phase 1: Bug Fixes (COMPLETE)
 
-#### Week 1: Core Protocol Fixes
-1. **Fix ARP interface detection** (1 day)
-   - Use `ingressInterface.name` instead of hardcoded `'eth0'`
-   
-2. **Implement ARP/MAC table aging** (2 days)
-   - Add aging counter increment in simulation tick
-   - Remove entries exceeding timeout (ARP: 300s, MAC: 300s)
-   
-3. **Fix packet path tracking** (1 day)
-   - Update `packet.path` array as packet traverses devices
-   
-4. **Add explicit packet flags** (1 day)
-   - Add `isLocallyGenerated` flag
-   - Remove placeholder MAC workaround
+#### Core Protocol Fixes - ALL DONE
+1. ✅ **Fix ARP interface detection** - Uses `ingressInterface.name`
+2. ⏸️ **ARP/MAC table aging** - Deferred (design decision for better UX)
+3. ✅ **Fix packet path tracking** - `addToPath()` implemented
+4. ✅ **Add explicit packet flags** - `isLocallyGenerated` added
 
-#### Week 2: Error Handling
-5. **Implement ICMP Destination Unreachable** (2 days)
-   - Type 3 Code 0: Network Unreachable
-   - Type 3 Code 1: Host Unreachable
-   - Type 3 Code 3: Port Unreachable
-   
-6. **Fix buffered packet handling** (1 day)
-   - Improve ARP resolution wakeup mechanism
-   
-7. **Add firewall rule evaluation** (2 days)
-   - Check rules in `processL3Logic`
-   - Implement match logic for all rule fields
+#### Error Handling - ALL DONE
+5. ✅ **ICMP Destination Unreachable** - Type 3 Code 0 implemented
+6. ✅ **ICMP Time Exceeded** - Type 11 Code 0 implemented
+7. ✅ **Fix buffered packet handling** - ARP wake-up in tick()
+8. ✅ **Add firewall rule evaluation** - Full matching engine
 
 ---
 
-### Phase 2: Core Feature Completion (2-3 weeks)
+### ✅ Phase 2: Core Feature Completion (PARTIAL)
 
-#### Week 3: L2 Improvements
-8. **Implement STP** (5 days)
-   - BPDU packet structure
-   - Port state machine
-   - Root bridge election
-   - Basic topology management
+#### L2 Improvements
+9. ✅ **Complete VLAN support** - Full 802.1Q implementation with SVI
+10. ☐ **Implement STP** - Still needed for loop prevention
 
-#### Week 4: TCP Foundation
-9. **Implement TCP 3-way handshake** (3 days)
-   - SYN, SYN-ACK, ACK packet handling
-   - Connection state tracking
-   
-10. **Implement TCP teardown** (2 days)
-    - FIN, ACK handling
-    - TIME_WAIT state
+#### TCP Foundation - NOT STARTED
+11. ☐ **Implement TCP 3-way handshake**
+12. ☐ **Implement TCP teardown**
 
-#### Week 5: VLAN & NAT
-11. **Complete VLAN support** (3 days)
-    - Access/trunk port configuration
-    - 802.1Q tag handling
-    - Inter-VLAN routing
-    
-12. **Implement basic NAT** (2 days)
-    - Source NAT (masquerade)
-    - NAT table structure
+#### NAT - NOT STARTED
+13. ☐ **Implement basic NAT/PAT**
 
 ---
 
-### Phase 3: Advanced Features (3-4 weeks)
+### Phase 3: Advanced Features (Future)
 
-#### Week 6-7: Protocol Enhancements
-13. **DHCP DORA handshake** (2 days)
-14. **DHCP relay agent** (1 day)
-15. **DNS query simulation** (2 days)
-16. **CDP/LLDP discovery** (2 days)
-17. **Port security on switches** (2 days)
+#### Protocol Enhancements
+14. ☐ **DHCP DORA handshake** (optional - current instant DHCP works)
+15. ☐ **DHCP relay agent**
+16. ☐ **CDP/LLDP discovery**
+17. ☐ **Port security on switches**
 
-#### Week 8-9: Routing & Filtering
-18. **Simple RIP implementation** (3 days)
-19. **Extended firewall features** (2 days)
-    - Stateful inspection
-    - Connection tracking
-20. **DNAT/PAT support** (2 days)
+#### Routing & Filtering
+18. ☐ **Simple RIP implementation**
+19. ☐ **Extended firewall features** (stateful inspection)
+20. ☐ **DNAT/PAT support**
 
 ---
 
 ## Part 4: Code Quality Improvements
 
-### 4.1 Testing Gaps
-- Add tests for firewall rule matching
-- Add tests for VLAN handling
-- Add integration tests for multi-hop routing scenarios
-- Add tests for error conditions (TTL expiry, unreachable)
+### 4.1 Testing - ✅ COMPLETE
+- ✅ Tests for firewall rule matching (6 tests in `phase1-fixes.test.ts`)
+- ✅ Tests for VLAN handling (49 tests in `vlan.test.ts`)
+- ✅ Integration tests for multi-hop routing (in `integration.test.ts`)
+- ✅ Tests for error conditions (TTL expiry, unreachable in `simulation.test.ts`)
+- **Total: 212 tests passing**
 
 ### 4.2 Performance Considerations
-- MAC/ARP table lookups should use Maps for O(1) access
-- Consider packet batching for high-traffic simulations
-- Implement simulation tick throttling for large networks
+- ☐ MAC/ARP table lookups could use Maps for O(1) access (currently arrays)
+- ☐ Consider packet batching for high-traffic simulations
+- ☐ Implement simulation tick throttling for large networks
 
-### 4.3 Code Organization
-- Extract protocol handlers into separate modules:
+### 4.3 Code Organization (Future Refactoring)
+- ☐ Extract protocol handlers into separate modules:
   - `protocols/arp.ts`
   - `protocols/icmp.ts`
   - `protocols/tcp.ts`
   - `protocols/dhcp.ts`
   - `protocols/stp.ts`
-- Create protocol state machines as separate classes
+- ☐ Create protocol state machines as separate classes
 
 ### 4.4 Documentation
-- Add JSDoc comments to all protocol functions
-- Document packet flow through the system
-- Create architecture diagram
+- ☐ Add JSDoc comments to all protocol functions
+- ☐ Document packet flow through the system
+- ☐ Create architecture diagram
 
 ---
 
 ## Part 5: Prioritized Task List
 
 ### Completed ✅
-1. ✅ **Complete VLAN support** (Phases 1-6)
+
+#### Phase 1: VLAN Support (Complete)
+1. ✅ **Complete VLAN support**
    - Access/trunk port modes
    - 802.1Q VLAN tagging/untagging
    - VLAN-aware MAC learning
    - VLAN-aware forwarding
    - SVI (Switch Virtual Interfaces) for inter-VLAN routing
    - Trunk link processing
-   - UI for VLAN management
 
-### Immediate (This Sprint)
-1. ☐ Fix hardcoded ARP interface
-2. ☐ Implement ARP table aging
-3. ☐ Implement MAC table aging
-4. ☐ Add ICMP Destination Unreachable
-5. ☐ Fix packet path tracking
+#### Phase 2: Core Protocol Fixes (Complete)
+2. ✅ **Fix hardcoded ARP interface** - Uses `ingressInterface?.name`
+3. ✅ **Packet path tracking** - `addToPath()` function implemented
+4. ✅ **Explicit `isLocallyGenerated` flag** - Proper TTL handling
+5. ✅ **ICMP Destination Unreachable** - Type 3 Code 0 (Network Unreachable)
+6. ✅ **ICMP Time Exceeded** - Type 11 Code 0 (TTL expired)
+7. ✅ **Firewall rule evaluation** - Full rule matching with implicit deny
+8. ✅ **Buffered packet handling** - ARP wake-up mechanism in tick()
+9. ✅ **Passive ARP learning** - Learn from IP packet source addresses
 
-### Short-term (Next 2 Sprints)
-6. ☐ Implement firewall rule enforcement
-7. ☐ Implement STP (at least basic loop prevention)
-8. ☐ Implement TCP handshake
+#### Phase 3: Testing Infrastructure (Complete)
+10. ✅ **Comprehensive test suite** - 212 tests:
+    - `network-utils.test.ts` - 48 tests (IP math, MAC, routing utilities)
+    - `simulation.test.ts` - 24 tests (packet processing)
+    - `phase1-fixes.test.ts` - 24 tests (bug fixes validation)
+    - `vlan.test.ts` - 49 tests (VLAN functionality)
+    - `network-store.test.ts` - 57 tests (store operations)
+    - `integration.test.ts` - 10 tests (end-to-end flows)
+
+#### Design Decisions
+11. ✅ **ARP/MAC table aging disabled** - Intentional for learning simulator UX
+
+### Immediate (Next Sprint)
+1. ☐ **Implement STP** (basic loop prevention)
+   - BPDU packet structure
+   - Port states: Blocking, Forwarding
+   - Root bridge election (simplified)
+
+### Short-term (Next 2-3 Sprints)
+2. ☐ **Implement TCP 3-way handshake**
+   - SYN, SYN-ACK, ACK packet handling
+   - Connection state tracking (`tcpConnections` array)
+3. ☐ **Implement TCP teardown**
+   - FIN, ACK handling
+   - TIME_WAIT state
 
 ### Medium-term (Next Quarter)
-9. ☐ Implement NAT/PAT
-10. ☐ Implement DHCP DORA sequence
-11. ☐ Add simple routing protocol (RIP)
-12. ☐ Add CDP/LLDP
+4. ☐ **Implement NAT/PAT**
+   - Source NAT (masquerade)
+   - NAT table structure
+   - Inside/Outside interface designation
+5. ☐ **DHCP DORA sequence** (optional enhancement)
+   - Currently instant; could simulate 4-way handshake packets
+6. ☐ **Simple routing protocol (RIP)**
+7. ☐ **CDP/LLDP discovery**
 
 ### Long-term (Future)
-13. ☐ IPv6 support
-14. ☐ QoS simulation
-15. ☐ Wireless simulation
-16. ☐ SNMP
+8. ☐ IPv6 support
+9. ☐ QoS simulation
+10. ☐ Wireless simulation
+11. ☐ SNMP
 
 ---
 
 ## Appendix: File Reference
 
-| File | Purpose | Issues Found |
-|------|---------|--------------|
-| `src/lib/simulation.ts` | Core packet processing | ARP interface, TTL handling, missing ICMP errors |
-| `src/store/network-store.ts` | State management | DHCP instant, DNS sync, buffered packet handling |
-| `src/lib/network-utils.ts` | Network utilities | None significant |
-| `src/types/network.ts` | Type definitions | TCP types unused, VLAN incomplete |
-| `src/lib/terminal-commands.ts` | CLI implementation | Good coverage |
+| File | Purpose | Status |
+|------|---------|--------|
+| `src/lib/simulation.ts` | Core packet processing | ✅ ARP, TTL, ICMP errors all fixed |
+| `src/store/network-store.ts` | State management | ✅ Buffered packets fixed, DHCP/DNS work |
+| `src/lib/network-utils.ts` | Network utilities | ✅ All utilities working, 48 tests |
+| `src/types/network.ts` | Type definitions | ✅ VLAN complete, TCP types ready for use |
+| `src/lib/terminal-commands.ts` | CLI implementation | ✅ Good coverage |
+| `src/__tests__/*.test.ts` | Test suites | ✅ 212 tests passing |
 
 ---
 
 *Document generated: December 15, 2025*
-*Version: 1.1*
+*Last updated: December 15, 2025*
+*Version: 2.0*
 
 ---
 

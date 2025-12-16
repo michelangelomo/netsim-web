@@ -232,3 +232,65 @@ Show all interfaces including SVIs.
 ```
 show ip interface brief
 ```
+
+## Spanning Tree Protocol (STP) Commands
+
+### spanning-tree enable
+Enable STP on a switch.
+```
+spanning-tree enable
+```
+
+### spanning-tree disable
+Disable STP on a switch (all ports become forwarding).
+```
+spanning-tree disable
+```
+
+### spanning-tree priority
+Set the bridge priority (0-61440, must be multiple of 4096). Lower priority = more likely to be root.
+```
+spanning-tree priority 4096
+```
+
+### spanning-tree cost
+Set the path cost on a port (in interface configuration mode).
+```
+interface GigabitEthernet0/0
+spanning-tree cost 100
+```
+
+### spanning-tree port-priority
+Set the port priority (0-255). Lower priority = more likely to be root port.
+```
+interface GigabitEthernet0/0
+spanning-tree port-priority 64
+```
+
+### spanning-tree reconverge
+Force STP to recalculate the topology.
+```
+spanning-tree reconverge
+```
+
+### show spanning-tree
+Display STP status including root bridge, bridge ID, timers, and whether this switch is root.
+```
+show spanning-tree
+show stp
+```
+
+### show stp interface
+Display per-port STP states, roles, costs, and priorities.
+```
+show stp interface
+show spanning-tree interface
+```
+
+### show stp detail
+Display detailed STP information for each port.
+```
+show stp detail
+show spanning-tree detail
+```
+
