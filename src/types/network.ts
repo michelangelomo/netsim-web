@@ -285,6 +285,8 @@ export interface Packet {
     rst?: boolean;
     psh?: boolean;
   };
+  tcpSeq?: number;
+  tcpAck?: number;
 
   // VLAN tagging (802.1Q)
   vlanTag?: number;

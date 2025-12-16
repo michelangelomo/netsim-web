@@ -172,6 +172,7 @@ interface NetworkStore {
 
   // Terminal state
   activeTerminalDevice: string | null;
+  terminalMinimized: boolean;
   terminalHistory: Map<string, Array<{ command: string; output: string; timestamp: number }>>;
 
   // Notifications
@@ -268,6 +269,7 @@ interface NetworkStore {
 
   // Actions - Terminal
   setActiveTerminal: (deviceId: string | null) => void;
+  setTerminalMinimized: (minimized: boolean) => void;
   executeCommand: (deviceId: string, command: string) => string;
   addTerminalHistory: (deviceId: string, command: string, output: string) => void;
   clearTerminalHistory: (deviceId: string) => void;
@@ -394,6 +396,7 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
   },
   packets: [],
   activeTerminalDevice: null,
+  terminalMinimized: false,
   terminalHistory: new Map(),
   notifications: [],
   deviceCounters: {
@@ -2350,6 +2353,10 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
   // Terminal
   setActiveTerminal: (deviceId) => {
     set({ activeTerminalDevice: deviceId });
+  },
+
+  setTerminalMinimized: (minimized) => {
+    set({ terminalMinimized: minimized });
   },
 
   executeCommand: (deviceId, command) => {

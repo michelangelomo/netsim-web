@@ -15,6 +15,7 @@ export default function Home() {
     removeDevice,
     selectedDeviceId,
     activeTerminalDevice,
+    terminalMinimized,
     setActiveTerminal,
   } = useNetworkStore();
 
@@ -62,7 +63,7 @@ export default function Home() {
       <Header />
 
       {/* Main content */}
-      <div className={`flex-1 flex overflow-hidden transition-all duration-300 ${activeTerminalDevice ? 'pb-80' : ''}`}>
+      <div className={`flex-1 flex overflow-hidden transition-all duration-300 ${activeTerminalDevice && !terminalMinimized ? 'pb-80' : ''}`}>
         {/* Left sidebar - Device palette */}
         <Sidebar />
 

@@ -28,9 +28,10 @@ export function Terminal() {
     terminalHistory,
     addTerminalHistory,
     clearTerminalHistory,
+    terminalMinimized: isMinimized,
+    setTerminalMinimized: setIsMinimized,
   } = useNetworkStore();
 
-  const [isMinimized, setIsMinimized] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
