@@ -1508,7 +1508,8 @@ function processL3Logic(
 export function processLinkTick(
     packet: Packet,
     connections: Connection[],
-    simulationSpeed: number
+    simulationSpeed: number,
+    deterministicLoss = false
 ): Packet {
     if (packet.processingStage !== 'on-link' || !packet.targetDeviceId) {
         return packet;
@@ -1524,7 +1525,19 @@ export function processLinkTick(
     const latencyMs = connection?.latency ?? 1;
     const lossPct = connection?.packetLoss ?? 0;
 
-    if (lossPct > 0 && Math.random() < lossPct / 100) {
+    const randomSample = () => {
+        if (!deterministicLoss) return Math.random();
+        const seed = `${packet.id}-${packet.progress}-${packet.currentDeviceId}`;
+        let hash = 0;
+        for (let i = 0; i < seed.length; i++) {
+            hash = (hash << 5) - hash + seed.charCodeAt(i);
+            hash |= 0;
+        }
+        const x = Math.sin(hash) * 10000;
+        return x - Math.floor(x);
+    };
+
+    if (lossPct > 0 && randomSample() < lossPct / 100) {
         return { ...packet, processingStage: 'dropped' };
     }
 

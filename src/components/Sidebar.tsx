@@ -16,10 +16,10 @@ import {
   Trash2,
   Play,
   Square,
-  Zap,
   Activity,
   Table,
   Github,
+  StepForward,
 } from 'lucide-react';
 import { useNetworkStore } from '@/store/network-store';
 import type { DeviceType } from '@/types/network';
@@ -42,7 +42,11 @@ export function Sidebar() {
     simulation,
     startSimulation,
     stopSimulation,
+    setSimulationPreset,
+    setDeterministicLoss,
+    stepSimulation,
     devices,
+    eventLog,
   } = useNetworkStore();
 
   const handleDragStart = useCallback((e: React.DragEvent, type: DeviceType) => {
@@ -80,6 +84,53 @@ export function Sidebar() {
 
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto">
+        {/* Simulation Controls */}
+        <div className="p-4 border-b border-dark-800 space-y-3">
+          <h2 className="text-xs font-semibold text-dark-400 uppercase tracking-wider mb-1">
+            Simulation
+          </h2>
+          <div className="flex gap-2">
+            <button
+              onClick={() => (simulation.isRunning ? stopSimulation() : startSimulation())}
+              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg border transition-all duration-150 ${simulation.isRunning ? 'border-amber-500/40 text-amber-300 bg-amber-500/10' : 'border-emerald-500/40 text-emerald-300 bg-emerald-500/10'}`}
+            >
+              {simulation.isRunning ? <Square className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+              {simulation.isRunning ? 'Pause' : 'Start'}
+            </button>
+            <button
+              onClick={() => stepSimulation()}
+              className="px-3 py-2 rounded-lg border border-dark-600 text-dark-200 hover:border-cyan-500/50 hover:text-cyan-200 flex items-center gap-2"
+              title="Step"
+            >
+              <StepForward className="w-4 h-4" />
+              Step
+            </button>
+          </div>
+          <div className="flex gap-2 text-xs">
+            {(['slow', 'normal', 'fast'] as const).map((preset) => (
+              <button
+                key={preset}
+                onClick={() => setSimulationPreset(preset)}
+                className={`flex-1 px-2 py-1.5 rounded border text-center capitalize ${simulation.speed === (preset === 'slow' ? 0.5 : preset === 'normal' ? 1 : 2)
+                  ? 'border-blue-500/50 text-blue-200 bg-blue-500/10'
+                  : 'border-dark-700 text-dark-300 hover:border-blue-500/30'
+                  }`}
+              >
+                {preset}
+              </button>
+            ))}
+          </div>
+          <label className="flex items-center gap-2 text-xs text-dark-300">
+            <input
+              type="checkbox"
+              checked={simulation.deterministicLoss ?? false}
+              onChange={(e) => setDeterministicLoss(e.target.checked)}
+              className="accent-blue-500"
+            />
+            Deterministic loss (reproducible)
+          </label>
+        </div>
+
         {/* Device Palette */}
         <div className="p-4">
           <h2 className="text-xs font-semibold text-dark-400 uppercase tracking-wider mb-3">
@@ -131,6 +182,33 @@ export function Sidebar() {
               value={useNetworkStore.getState().connections.length.toString()}
               color="cyan"
             />
+          </div>
+        </div>
+
+        {/* Event Log */}
+        <div className="p-4 border-t border-dark-800 space-y-2">
+          <h2 className="text-xs font-semibold text-dark-400 uppercase tracking-wider mb-1 flex items-center gap-2">
+            <Activity className="w-4 h-4" /> Event Feed
+          </h2>
+          <div className="space-y-1 max-h-32 overflow-y-auto pr-1">
+            {eventLog.slice(-8).reverse().map((e) => (
+              <div key={e.id} className="text-xs bg-dark-800/70 border border-dark-700 rounded-lg px-2 py-1.5 flex items-center gap-2">
+                <span className="text-[10px] text-dark-500">
+                  {new Date(e.timestamp).toLocaleTimeString()}
+                </span>
+                <span className={`px-1.5 py-0.5 rounded text-[10px] ${e.type === 'tcp' ? 'bg-emerald-500/15 text-emerald-300' :
+                  e.type === 'icmp' ? 'bg-blue-500/15 text-blue-300' :
+                    e.type === 'arp' ? 'bg-violet-500/15 text-violet-300' :
+                      e.type === 'stp' ? 'bg-cyan-500/15 text-cyan-300' :
+                        e.type === 'link' ? 'bg-amber-500/15 text-amber-300' :
+                          'bg-dark-600 text-dark-200'
+                  }`}>
+                  {e.type}
+                </span>
+                <span className="text-dark-200 truncate">{e.message}</span>
+              </div>
+            ))}
+            {eventLog.length === 0 && <div className="text-[11px] text-dark-500">No events yet</div>}
           </div>
         </div>
       </div>

@@ -7,6 +7,7 @@ import { NetworkCanvas } from '@/components/NetworkCanvas';
 import { PropertiesPanel } from '@/components/PropertiesPanel';
 import { Terminal } from '@/components/Terminal';
 import { Notifications } from '@/components/Notifications';
+import { TutorialCoach } from '@/components/TutorialCoach';
 import { useNetworkStore } from '@/store/network-store';
 
 export default function Home() {
@@ -81,6 +82,9 @@ export default function Home() {
 
       {/* Notifications */}
       <Notifications />
+
+      {/* Tutorials */}
+      <TutorialCoach />
     </div>
   );
 }

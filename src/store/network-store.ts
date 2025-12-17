@@ -21,6 +21,10 @@ import type {
   StpPortRole,
   BpduPayload,
   TcpConnection,
+  LinkStats,
+  EventLogEntry,
+  TutorialDefinition,
+  TutorialState,
 } from '@/types/network';
 import {
   generateMacAddress,
@@ -32,6 +36,7 @@ import {
   isBroadcastMAC,
 } from '@/lib/network-utils';
 import { processDeviceTick, processLinkTick } from '@/lib/simulation';
+import { tutorials } from '@/lib/tutorials';
 
 type DhcpServerMatch = { device: NetworkDevice; config: DhcpServerConfig };
 
@@ -67,6 +72,39 @@ function calculatePathCost(speed: number): number {
   if (speed >= 100) return 19;       // 100 Mbps
   if (speed >= 10) return 100;       // 10 Mbps
   return 200;                         // Default
+}
+
+// Link stats helpers
+const LINK_HISTORY_LEN = 24;
+
+function buildLinkStats(base?: LinkStats): LinkStats {
+  return (
+    base ?? {
+      lossHistory: [],
+      rttHistory: [],
+      drops: 0,
+      delivered: 0,
+      lastUpdated: Date.now(),
+    }
+  );
+}
+
+function nextLinkStats(prev: LinkStats | undefined, opts: { dropped?: boolean; delivered?: boolean; rttMs?: number }): LinkStats {
+  const stats = buildLinkStats(prev);
+  const lossSample = opts.dropped ? 1 : 0;
+  const rtt = opts.rttMs ?? null;
+
+  const lossHistory = [...stats.lossHistory, lossSample].slice(-LINK_HISTORY_LEN);
+  const rttHistory = rtt !== null ? [...stats.rttHistory, rtt].slice(-LINK_HISTORY_LEN) : stats.rttHistory;
+
+  return {
+    ...stats,
+    lossHistory,
+    rttHistory,
+    drops: stats.drops + (opts.dropped ? 1 : 0),
+    delivered: stats.delivered + (opts.delivered ? 1 : 0),
+    lastUpdated: Date.now(),
+  };
 }
 
 function getDhcpServers(device: NetworkDevice): DhcpServerConfig[] {
@@ -157,6 +195,9 @@ interface NetworkStore {
   // Devices and connections
   devices: NetworkDevice[];
   connections: Connection[];
+  connectionStats: Record<string, LinkStats>;
+  tutorials: TutorialDefinition[];
+  tutorial: TutorialState;
 
   // Selection state
   selectedDeviceId: string | null;
@@ -169,6 +210,7 @@ interface NetworkStore {
   // Simulation state
   simulation: SimulationState;
   packets: Packet[];
+  eventLog: EventLogEntry[];
 
   // Terminal state
   activeTerminalDevice: string | null;
@@ -219,6 +261,9 @@ interface NetworkStore {
   startSimulation: () => void;
   stopSimulation: () => void;
   setSimulationSpeed: (speed: number) => void;
+  setSimulationPreset: (preset: 'slow' | 'normal' | 'fast') => void;
+  setDeterministicLoss: (enabled: boolean) => void;
+  stepSimulation: () => void;
   tick: () => void;
 
   // Actions - Packets
@@ -229,10 +274,12 @@ interface NetworkStore {
   // Actions - ARP
   resolveARP: (deviceId: string, targetIP: string) => string | null;
   updateArpTable: (deviceId: string, entry: ArpEntry) => void;
+  clearArpTable: (deviceId: string) => void;
 
   // Actions - MAC Table (for switches)
   learnMAC: (deviceId: string, macAddress: string, port: string, vlan?: number) => void;
   lookupMAC: (deviceId: string, macAddress: string, vlan?: number) => string | null;
+  clearMacTable: (deviceId: string) => void;
 
   // Actions - VLAN (for switches)
   addVlan: (deviceId: string, vlan: { id: number; name: string }) => boolean;
@@ -283,6 +330,15 @@ interface NetworkStore {
   // Actions - Notifications
   addNotification: (notification: Omit<Notification, 'id' | 'timestamp'>) => void;
   removeNotification: (id: string) => void;
+  addEvent: (entry: Omit<EventLogEntry, 'id' | 'timestamp'> & { id?: string; timestamp?: number }) => void;
+  clearEvents: () => void;
+
+  // Tutorials
+  startTutorial: (id: string) => void;
+  endTutorial: () => void;
+  nextTutorialStep: () => void;
+  prevTutorialStep: () => void;
+  dismissTutorials: () => void;
 
   // Actions - Project
   clearProject: () => void;
@@ -390,6 +446,9 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
   // Initial state
   devices: [],
   connections: [],
+  connectionStats: {},
+  tutorials,
+  tutorial: { activeId: null, activeStepIndex: 0, dismissed: true },
   selectedDeviceId: null,
   selectedConnectionId: null,
   currentTool: 'select',
@@ -399,8 +458,10 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
     speed: 2,
     currentTime: 0,
     packets: [],
+    deterministicLoss: false,
   },
   packets: [],
+  eventLog: [],
   activeTerminalDevice: null,
   terminalMinimized: false,
   terminalHistory: new Map(),
@@ -541,6 +602,10 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
     // Update interfaces to mark as connected
     set((state) => ({
       connections: [...state.connections, connection],
+      connectionStats: {
+        ...state.connectionStats,
+        [connection.id]: buildLinkStats(),
+      },
       devices: state.devices.map((d) => {
         if (d.id === sourceDeviceId) {
           return {
@@ -569,6 +634,13 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
       message: `${sourceDevice.name}:${sourceInterface.name} <-> ${targetDevice.name}:${targetInterface.name}`,
     });
 
+    get().addEvent({
+      type: 'link',
+      message: `Link up ${sourceDevice.name}:${sourceInterface.name} ↔ ${targetDevice.name}:${targetInterface.name}`,
+      deviceIds: [sourceDevice.id, targetDevice.id],
+      connectionId: connection.id,
+    });
+
     return connection;
   },
 
@@ -578,6 +650,9 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
 
     set((state) => ({
       connections: state.connections.filter((c) => c.id !== connectionId),
+      connectionStats: Object.fromEntries(
+        Object.entries(state.connectionStats).filter(([id]) => id !== connectionId)
+      ),
       devices: state.devices.map((d) => {
         if (d.id === connection.sourceDeviceId || d.id === connection.targetDeviceId) {
           return {
@@ -594,6 +669,13 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
       }),
       selectedConnectionId: state.selectedConnectionId === connectionId ? null : state.selectedConnectionId,
     }));
+
+    get().addEvent({
+      type: 'link',
+      message: `Link down ${connectionId}`,
+      deviceIds: [connection.sourceDeviceId, connection.targetDeviceId],
+      connectionId,
+    });
   },
 
   selectConnection: (connectionId) => {
@@ -705,6 +787,7 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
       title: 'Simulation Started',
       message: 'Network simulation is now running',
     });
+    get().addEvent({ type: 'system', message: 'Simulation started' });
   },
 
   stopSimulation: () => {
@@ -723,6 +806,7 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
       title: 'Simulation Stopped',
       message: 'Network simulation has been stopped. ARP and MAC tables cleared.',
     });
+    get().addEvent({ type: 'system', message: 'Simulation stopped' });
   },
 
   setSimulationSpeed: (speed) => {
@@ -731,12 +815,36 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
     }));
   },
 
+  setSimulationPreset: (preset) => {
+    const speeds: Record<'slow' | 'normal' | 'fast', number> = { slow: 0.5, normal: 1, fast: 2 };
+    const speed = speeds[preset];
+    set((state) => ({
+      simulation: { ...state.simulation, speed },
+    }));
+  },
+
+  setDeterministicLoss: (enabled) => {
+    set((state) => ({
+      simulation: { ...state.simulation, deterministicLoss: enabled },
+    }));
+  },
+
+  stepSimulation: () => {
+    const wasRunning = get().simulation.isRunning;
+    if (wasRunning) {
+      get().tick();
+      return;
+    }
+    get().tick();
+  },
+
   tick: () => {
     const state = get();
     if (!state.simulation.isRunning) return;
 
     const newPackets: Packet[] = [];
     const processedPacketIds = new Set<string>();
+    const linkStatUpdates: Record<string, LinkStats> = {};
 
     // Process each packet
     for (const packet of state.packets) {
@@ -744,6 +852,7 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
       processedPacketIds.add(packet.id);
 
       let result: Packet[] | Packet = [];
+      let connectionForPacket: Connection | undefined;
 
       if (packet.processingStage === 'at-device') {
         const device = state.devices.find((d) => d.id === packet.currentDeviceId);
@@ -758,7 +867,17 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
           result = []; // Device gone, drop packet
         }
       } else if (packet.processingStage === 'on-link') {
-        result = processLinkTick(packet, state.connections, state.simulation.speed);
+        connectionForPacket = state.connections.find(
+          (c) => c.isUp &&
+            ((c.sourceDeviceId === packet.currentDeviceId && c.targetDeviceId === packet.targetDeviceId) ||
+              (c.targetDeviceId === packet.currentDeviceId && c.sourceDeviceId === packet.targetDeviceId))
+        );
+        result = processLinkTick(
+          packet,
+          state.connections,
+          state.simulation.speed,
+          state.simulation.deterministicLoss
+        );
       } else {
         // 'arrived', 'dropped', 'buffered'
         result = [packet];
@@ -766,6 +885,32 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
 
       const results = Array.isArray(result) ? result : [result];
       newPackets.push(...results);
+
+      if (connectionForPacket) {
+        const updated = results[0];
+        const rttMs = connectionForPacket.latency ? connectionForPacket.latency * 2 : undefined;
+        if (updated.processingStage === 'dropped') {
+          linkStatUpdates[connectionForPacket.id] = nextLinkStats(
+            linkStatUpdates[connectionForPacket.id] ?? state.connectionStats[connectionForPacket.id],
+            { dropped: true, rttMs }
+          );
+
+          get().addEvent({
+            type: 'link',
+            message: `Packet dropped on link ${connectionForPacket.id} (${updated.type || 'pkt'})`,
+            connectionId: connectionForPacket.id,
+            deviceIds: [connectionForPacket.sourceDeviceId, connectionForPacket.targetDeviceId],
+          });
+        } else if (
+          updated.processingStage === 'at-device' &&
+          updated.currentDeviceId === connectionForPacket.targetDeviceId
+        ) {
+          linkStatUpdates[connectionForPacket.id] = nextLinkStats(
+            linkStatUpdates[connectionForPacket.id] ?? state.connectionStats[connectionForPacket.id],
+            { delivered: true, rttMs }
+          );
+        }
+      }
     }
 
     // Wake buffered packets if ARP has been resolved meanwhile.
@@ -793,6 +938,10 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
       simulation: {
         ...state.simulation,
         currentTime: state.simulation.currentTime + 1,
+      },
+      connectionStats: {
+        ...state.connectionStats,
+        ...linkStatUpdates,
       },
     }));
   },
@@ -1247,6 +1396,18 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
         return { ...d, arpTable: next };
       }),
     }));
+
+    get().addEvent({
+      type: 'arp',
+      message: `ARP learned ${entry.ipAddress} → ${entry.macAddress}`,
+      deviceIds: [deviceId],
+    });
+  },
+
+  clearArpTable: (deviceId) => {
+    set((state) => ({
+      devices: state.devices.map((d) => (d.id === deviceId ? { ...d, arpTable: [] } : d)),
+    }));
   },
 
   // MAC Table
@@ -1282,6 +1443,12 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
       ? device.macTable.find((e) => e.macAddress === macAddress && e.vlan === vlan)
       : device.macTable.find((e) => e.macAddress === macAddress);
     return entry?.port || null;
+  },
+
+  clearMacTable: (deviceId) => {
+    set((state) => ({
+      devices: state.devices.map((d) => (d.id === deviceId ? { ...d, macTable: [] } : d)),
+    }));
   },
 
   // VLAN Management
@@ -1892,6 +2059,12 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
       }),
     }));
 
+    get().addEvent({
+      type: 'tcp',
+      message: `${device.name} listening on :${port}`,
+      deviceIds: [deviceId],
+    });
+
     return true;
   },
 
@@ -1936,6 +2109,12 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
     // Send SYN packet
     get().sendTcpPacket(deviceId, destIP, destPort, { syn: true }, localPort);
 
+    get().addEvent({
+      type: 'tcp',
+      message: `${device.name} SYN to ${destIP}:${destPort} (src ${sourceIface.ipAddress}:${localPort})`,
+      deviceIds: [deviceId],
+    });
+
     return connectionId;
   },
 
@@ -1962,6 +2141,12 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
 
     // Send FIN packet
     get().sendTcpPacket(deviceId, conn.remoteIP, conn.remotePort, { fin: true, ack: true }, conn.localPort);
+
+    get().addEvent({
+      type: 'tcp',
+      message: `${device.name} closing ${conn.remoteIP}:${conn.remotePort} (state FIN_WAIT_1)`,
+      deviceIds: [deviceId],
+    });
   },
 
   sendTcpPacket: (deviceId, destIP, destPort, flags, sourcePort) => {
@@ -2582,6 +2767,66 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
     set((state) => ({
       notifications: state.notifications.filter((n) => n.id !== id),
     }));
+  },
+
+  // Event log
+  addEvent: (entry) => {
+    const id = entry.id ?? uuidv4();
+    const timestamp = entry.timestamp ?? Date.now();
+    const newEntry: EventLogEntry = { ...entry, id, timestamp };
+    set((state) => ({
+      eventLog: [...state.eventLog.slice(-199), newEntry],
+    }));
+
+    // Auto-advance tutorial if current step waits on this event type
+    const { tutorial, tutorials } = get();
+    if (tutorial.activeId) {
+      const def = tutorials.find((t) => t.id === tutorial.activeId);
+      const step = def?.steps[tutorial.activeStepIndex];
+      if (step && step.completeOnEventType && step.completeOnEventType === newEntry.type) {
+        get().nextTutorialStep();
+      }
+    }
+  },
+
+  clearEvents: () => {
+    set({ eventLog: [] });
+  },
+
+  // Tutorials
+  startTutorial: (id) => {
+    const def = get().tutorials.find((t) => t.id === id);
+    if (!def) return;
+    set({ tutorial: { activeId: id, activeStepIndex: 0, dismissed: false } });
+  },
+
+  endTutorial: () => {
+    set({ tutorial: { activeId: null, activeStepIndex: 0, dismissed: false } });
+  },
+
+  nextTutorialStep: () => {
+    const { tutorial, tutorials } = get();
+    if (!tutorial.activeId) return;
+    const def = tutorials.find((t) => t.id === tutorial.activeId);
+    if (!def) return;
+    const nextIndex = tutorial.activeStepIndex + 1;
+    if (nextIndex >= def.steps.length) {
+      set({ tutorial: { activeId: null, activeStepIndex: 0, dismissed: false } });
+      get().addEvent({ type: 'system', message: `Tutorial completed: ${def.title}` });
+      return;
+    }
+    set({ tutorial: { ...tutorial, activeStepIndex: nextIndex } });
+  },
+
+  prevTutorialStep: () => {
+    const { tutorial } = get();
+    if (!tutorial.activeId) return;
+    const prev = Math.max(0, tutorial.activeStepIndex - 1);
+    set({ tutorial: { ...tutorial, activeStepIndex: prev } });
+  },
+
+  dismissTutorials: () => {
+    set({ tutorial: { activeId: null, activeStepIndex: 0, dismissed: true } });
   },
 
   // Project

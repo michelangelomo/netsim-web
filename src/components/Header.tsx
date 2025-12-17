@@ -10,9 +10,9 @@ import {
   Square,
   Download,
   Upload,
-  HelpCircle,
-  Settings,
+  BookOpen,
   Keyboard,
+  ChevronDown,
 } from 'lucide-react';
 import { useNetworkStore } from '@/store/network-store';
 
@@ -25,9 +25,15 @@ export function Header() {
     exportProject,
     loadProject,
     addNotification,
+    tutorial,
+    tutorials,
+    startTutorial,
+    endTutorial,
+    dismissTutorials,
   } = useNetworkStore();
 
   const [showHelp, setShowHelp] = useState(false);
+  const [showTutorialMenu, setShowTutorialMenu] = useState(false);
 
   const handleNew = useCallback(() => {
     if (confirm('Create a new project? All unsaved changes will be lost.')) {
@@ -128,11 +134,10 @@ export function Header() {
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 px-3 py-1.5 bg-dark-800 rounded-lg">
             <div
-              className={`w-2 h-2 rounded-full ${
-                simulation.isRunning
+              className={`w-2 h-2 rounded-full ${simulation.isRunning
                   ? 'bg-emerald-500 animate-pulse'
                   : 'bg-dark-500'
-              }`}
+                }`}
               style={{
                 boxShadow: simulation.isRunning
                   ? '0 0 10px rgba(16, 185, 129, 0.5)'
@@ -147,12 +152,67 @@ export function Header() {
 
         {/* Right - Help */}
         <div className="flex items-center gap-1">
+          <div className="relative">
+            <button
+              onClick={() => setShowTutorialMenu((v) => !v)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg border border-dark-700 text-sm transition-colors ${tutorial.activeId ? 'text-blue-200 border-blue-600/60 bg-blue-600/10' : 'text-dark-200 hover:text-white hover:border-dark-500'}`}
+            >
+              <BookOpen className="w-4 h-4" />
+              <span className="hidden sm:inline">Tutorials</span>
+              <ChevronDown className="w-4 h-4" />
+            </button>
+            {showTutorialMenu && (
+              <div className="absolute right-0 mt-2 w-56 bg-dark-900 border border-dark-700 rounded-lg shadow-2xl z-50 overflow-hidden">
+                <div className="py-2">
+                  <div className="px-3 pb-2 text-[11px] uppercase tracking-wide text-dark-500">Guided tutorials</div>
+                  {tutorials.map((tut) => {
+                    const isActive = tutorial.activeId === tut.id;
+                    return (
+                      <button
+                        key={tut.id}
+                        onClick={() => {
+                          startTutorial(tut.id);
+                          setShowTutorialMenu(false);
+                        }}
+                        className={`w-full text-left px-3 py-2 text-sm transition-colors ${isActive ? 'bg-blue-600/15 text-white' : 'text-dark-100 hover:bg-dark-800'}`}
+                      >
+                        <div className="font-semibold leading-tight flex items-center gap-2">
+                          {tut.title}
+                          {isActive && <span className="text-[11px] text-blue-300">active</span>}
+                        </div>
+                        <div className="text-[12px] text-dark-400 leading-tight line-clamp-2">{tut.summary}</div>
+                      </button>
+                    );
+                  })}
+                  <div className="border-t border-dark-800 mt-1 pt-1 space-y-1">
+                    <button
+                      onClick={() => {
+                        endTutorial();
+                        setShowTutorialMenu(false);
+                      }}
+                      className="w-full text-left px-3 py-2 text-sm text-dark-200 hover:bg-dark-800"
+                    >
+                      End tutorial
+                    </button>
+                    <button
+                      onClick={() => {
+                        dismissTutorials();
+                        setShowTutorialMenu(false);
+                      }}
+                      className="w-full text-left px-3 py-2 text-sm text-dark-200 hover:bg-dark-800"
+                    >
+                      Dismiss tutorials
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
           <HeaderButton
             icon={Keyboard}
             tooltip="Keyboard Shortcuts"
             onClick={() => setShowHelp(true)}
           />
-          <HeaderButton icon={HelpCircle} tooltip="Help" onClick={() => setShowHelp(true)} />
         </div>
       </header>
 

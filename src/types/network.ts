@@ -301,6 +301,51 @@ export interface SimulationState {
   speed: number; // 1x, 2x, 0.5x etc
   currentTime: number;
   packets: Packet[];
+  deterministicLoss?: boolean;
+}
+
+// Link diagnostics
+export interface LinkStats {
+  lossHistory: number[];
+  rttHistory: number[];
+  drops: number;
+  delivered: number;
+  lastUpdated: number;
+}
+
+// Event log entry
+export interface EventLogEntry {
+  id: string;
+  type: 'arp' | 'stp' | 'icmp' | 'tcp' | 'link' | 'system';
+  message: string;
+  deviceIds?: string[];
+  connectionId?: string;
+  timestamp: number;
+  severity?: 'info' | 'warn' | 'error';
+}
+
+// Tutorials
+export type TutorialTarget = 'canvas' | 'sidebar' | 'properties' | 'terminal' | 'event-feed' | 'header';
+
+export interface TutorialStep {
+  id: string;
+  title: string;
+  body: string;
+  target?: TutorialTarget;
+  completeOnEventType?: EventLogEntry['type'];
+}
+
+export interface TutorialDefinition {
+  id: string;
+  title: string;
+  summary: string;
+  steps: TutorialStep[];
+}
+
+export interface TutorialState {
+  activeId: string | null;
+  activeStepIndex: number;
+  dismissed: boolean;
 }
 
 // Terminal command result

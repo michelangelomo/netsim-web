@@ -65,6 +65,8 @@ export function PacketAnimation() {
   const { packets, devices, simulation, tick } = useNetworkStore();
   const viewport = useViewport();
   const animationRef = useRef<number | null>(null);
+  const lastTimeRef = useRef<number | null>(null);
+  const accumulatorRef = useRef(0);
 
   // Simulation Loop
   useEffect(() => {
@@ -73,11 +75,34 @@ export function PacketAnimation() {
         cancelAnimationFrame(animationRef.current);
         animationRef.current = null;
       }
+      lastTimeRef.current = null;
+      accumulatorRef.current = 0;
       return;
     }
 
-    const loop = () => {
-      tick();
+    const tickInterval = 1000 / 60; // 60Hz base
+
+    const loop = (time: number) => {
+      if (lastTimeRef.current === null) {
+        lastTimeRef.current = time;
+        animationRef.current = requestAnimationFrame(loop);
+        return;
+      }
+
+      const dt = time - lastTimeRef.current;
+      lastTimeRef.current = time;
+
+      // Scale time by simulation speed to make links faster/slower
+      accumulatorRef.current += dt * (simulation.speed || 1);
+
+      let steps = 0;
+      const maxSteps = 8; // avoid spiral of death
+      while (accumulatorRef.current >= tickInterval && steps < maxSteps) {
+        tick();
+        accumulatorRef.current -= tickInterval;
+        steps += 1;
+      }
+
       animationRef.current = requestAnimationFrame(loop);
     };
 
@@ -87,8 +112,10 @@ export function PacketAnimation() {
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
       }
+      lastTimeRef.current = null;
+      accumulatorRef.current = 0;
     };
-  }, [simulation.isRunning, tick]);
+  }, [simulation.isRunning, simulation.speed, tick]);
 
   if (!simulation.isRunning && packets.length === 0) return null;
 
@@ -106,13 +133,11 @@ export function PacketAnimation() {
       >
         <AnimatePresence>
           {packets.map((packet) => {
-            // Only animate packets on link or at device
-            if (packet.processingStage === 'dropped' || packet.processingStage === 'buffered') return null;
-
+            // Render location even for dropped/buffered to show indicators
             let x = 0;
             let y = 0;
 
-            if (packet.processingStage === 'at-device') {
+            if (packet.processingStage === 'at-device' || packet.processingStage === 'buffered' || packet.processingStage === 'dropped') {
               const device = devices.find((d) => d.id === packet.currentDeviceId);
               if (!device) return null;
               x = device.position.x + 70; // Center of node
@@ -136,7 +161,13 @@ export function PacketAnimation() {
               return null;
             }
 
-            const color = packetColors[packet.type] || '#3b82f6';
+            const color = packet.processingStage === 'dropped'
+              ? '#f43f5e'
+              : packet.processingStage === 'buffered'
+                ? '#f59e0b'
+                : packetColors[packet.type] || '#3b82f6';
+
+            const shapeRadius = packet.processingStage === 'buffered' ? 7 : 6;
 
             return (
               <g key={packet.id}>
@@ -144,22 +175,35 @@ export function PacketAnimation() {
                 <circle
                   cx={x}
                   cy={y}
-                  r={12}
+                  r={packet.processingStage === 'dropped' ? 10 : 12}
                   fill={color}
                   opacity={0.3}
                   filter="blur(4px)"
                 />
-                {/* Main packet dot */}
-                <motion.circle
-                  cx={x}
-                  cy={y}
-                  r={6}
-                  fill={color}
-                  layoutId={packet.id} // smooth transitions
-                  style={{
-                    filter: `drop-shadow(0 0 6px ${color})`,
-                  }}
-                />
+                {/* Main packet glyph */}
+                {packet.processingStage === 'buffered' ? (
+                  <motion.rect
+                    x={x - shapeRadius}
+                    y={y - shapeRadius}
+                    width={shapeRadius * 2}
+                    height={shapeRadius * 2}
+                    rx={2}
+                    fill={color}
+                    layoutId={packet.id}
+                    style={{ filter: `drop-shadow(0 0 6px ${color})` }}
+                  />
+                ) : (
+                  <motion.circle
+                    cx={x}
+                    cy={y}
+                    r={shapeRadius}
+                    fill={color}
+                    layoutId={packet.id}
+                    style={{
+                      filter: `drop-shadow(0 0 6px ${color})`,
+                    }}
+                  />
+                )}
                 {/* Type label */}
                 <text
                   x={x}
@@ -171,7 +215,11 @@ export function PacketAnimation() {
                   fontWeight="bold"
                   style={{ textTransform: 'uppercase' }}
                 >
-                  {packet.type}
+                  {packet.processingStage === 'dropped'
+                    ? 'DROP'
+                    : packet.processingStage === 'buffered'
+                      ? 'BUF'
+                      : packet.type}
                 </text>
               </g>
             );

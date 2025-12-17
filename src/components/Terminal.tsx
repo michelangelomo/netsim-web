@@ -1,11 +1,10 @@
-'use client';
+"use client";
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, type KeyboardEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Terminal as TerminalIcon,
   X,
-  Minus,
   Maximize2,
   ChevronDown,
   ChevronUp,
@@ -20,206 +19,130 @@ interface TerminalLine {
   timestamp: number;
 }
 
-// Per-tab state for lines and command history
 interface TabState {
   lines: TerminalLine[];
   commandHistory: string[];
   historyIndex: number;
 }
 
+const emptyTabState: TabState = { lines: [], commandHistory: [], historyIndex: -1 };
+
 export function Terminal() {
   const {
+    devices,
     activeTerminalDevice,
     setActiveTerminal,
-    devices,
-    terminalHistory,
-    addTerminalHistory,
-    clearTerminalHistory,
-    terminalMinimized: isMinimized,
-    setTerminalMinimized: setIsMinimized,
+    terminalMinimized,
+    setTerminalMinimized,
     terminalTabs,
     activeTerminalTabIndex,
-    removeTerminalTab,
     setActiveTerminalTab,
+    removeTerminalTab,
+    addTerminalHistory,
+    clearTerminalHistory,
   } = useNetworkStore();
 
-  const [isMaximized, setIsMaximized] = useState(false);
+  const [tabStates, setTabStates] = useState<Map<string, TabState>>(new Map());
   const [inputValue, setInputValue] = useState('');
   const [isExecuting, setIsExecuting] = useState(false);
+  const [isMaximized, setIsMaximized] = useState(false);
 
-  // Per-tab state stored by tab ID
-  const [tabStates, setTabStates] = useState<Map<string, TabState>>(new Map());
+  const outputRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
-  const inputRef = useRef<HTMLInputElement>(null);
-  const outputRef = useRef<HTMLDivElement>(null);
-
-  // Get active tab
   const activeTab = terminalTabs[activeTerminalTabIndex];
   const activeTabId = activeTab?.id;
+  const activeDeviceId = activeTab?.deviceId ?? activeTerminalDevice;
+  const activeDevice = devices.find((d) => d.id === activeDeviceId);
+  const isMinimized = terminalMinimized;
 
-  // Get active device
-  const activeDevice = activeTerminalDevice
-    ? devices.find((d) => d.id === activeTerminalDevice)
-    : null;
-
-  // Get or create tab state
-  const getTabState = useCallback((tabId: string): TabState => {
-    return tabStates.get(tabId) || { lines: [], commandHistory: [], historyIndex: -1 };
-  }, [tabStates]);
+  const getTabState = useCallback(
+    (tabId: string | undefined | null): TabState => {
+      if (!tabId) return emptyTabState;
+      return tabStates.get(tabId) ?? emptyTabState;
+    },
+    [tabStates]
+  );
 
   const updateTabState = useCallback((tabId: string, updates: Partial<TabState>) => {
-    setTabStates(prev => {
-      const newMap = new Map(prev);
-      const currentState = prev.get(tabId) || { lines: [], commandHistory: [], historyIndex: -1 };
-      newMap.set(tabId, { ...currentState, ...updates });
-      return newMap;
+    setTabStates((prev) => {
+      const current = prev.get(tabId) ?? emptyTabState;
+      const next = new Map(prev);
+      next.set(tabId, { ...current, ...updates });
+      return next;
     });
   }, []);
 
-  // Current tab state
-  const currentTabState = activeTabId ? getTabState(activeTabId) : { lines: [], commandHistory: [], historyIndex: -1 };
-  const { lines, commandHistory, historyIndex } = currentTabState;
+  const setLines = useCallback(
+    (updater: TabState['lines'] | ((prev: TabState['lines']) => TabState['lines'])) => {
+      if (!activeTabId) return;
+      setTabStates((prev) => {
+        const current = prev.get(activeTabId) ?? emptyTabState;
+        const nextLines = typeof updater === 'function' ? updater(current.lines) : updater;
+        const next = new Map(prev);
+        next.set(activeTabId, { ...current, lines: nextLines });
+        return next;
+      });
+    },
+    [activeTabId]
+  );
 
-  // Helper to update lines for current tab
-  const setLines = useCallback((updater: TerminalLine[] | ((prev: TerminalLine[]) => TerminalLine[])) => {
-    if (!activeTabId) return;
-    setTabStates(prev => {
-      const newMap = new Map(prev);
-      const currentState = prev.get(activeTabId) || { lines: [], commandHistory: [], historyIndex: -1 };
-      const newLines = typeof updater === 'function' ? updater(currentState.lines) : updater;
-      newMap.set(activeTabId, { ...currentState, lines: newLines });
-      return newMap;
-    });
-  }, [activeTabId]);
+  const { lines, commandHistory, historyIndex } = getTabState(activeTabId);
 
-  // Initialize tab state when a new tab is created
+  // Ensure new tabs start with an empty state
   useEffect(() => {
-    if (!activeTabId || !activeTerminalDevice) return;
-
-    // Check if this tab already has state
-    if (tabStates.has(activeTabId)) return;
-
-    const history = terminalHistory.get(activeTerminalDevice) || [];
-    const newLines: TerminalLine[] = [];
-
-    // Add welcome message
-    newLines.push({
-      type: 'output',
-      content: `
-╔══════════════════════════════════════════════════════════════╗
-║  NetSim Web Terminal v1.0                                    ║
-║  Type 'help' for available commands                          ║
-╚══════════════════════════════════════════════════════════════╝
-`,
-      timestamp: Date.now(),
-    });
-
-    const device = devices.find(d => d.id === activeTerminalDevice);
-    if (device) {
-      newLines.push({
-        type: 'output',
-        content: `Connected to ${device.name} (${device.hostname})`,
-        timestamp: Date.now(),
+    terminalTabs.forEach((tab) => {
+      setTabStates((prev) => {
+        if (prev.has(tab.id)) return prev;
+        const next = new Map(prev);
+        next.set(tab.id, emptyTabState);
+        return next;
       });
+    });
+  }, [terminalTabs]);
+
+  // Focus input when terminal becomes active or changes tabs
+  useEffect(() => {
+    if (!isMinimized && activeTerminalDevice) {
+      inputRef.current?.focus();
     }
+  }, [isMinimized, activeTerminalDevice, activeTabId]);
 
-    // Add previous history
-    history.forEach((entry) => {
-      newLines.push({
-        type: 'input',
-        content: entry.command,
-        timestamp: entry.timestamp,
-      });
-      newLines.push({
-        type: 'output',
-        content: entry.output,
-        timestamp: entry.timestamp,
-      });
-    });
-
-    updateTabState(activeTabId, { lines: newLines });
-  }, [activeTabId, activeTerminalDevice, devices, terminalHistory, tabStates, updateTabState]);
-
-  // Auto-scroll to bottom
+  // Scroll to bottom on new output
   useEffect(() => {
     if (outputRef.current) {
       outputRef.current.scrollTop = outputRef.current.scrollHeight;
     }
   }, [lines]);
 
-  // Focus input when terminal opens or tab changes
-  useEffect(() => {
-    if (activeTerminalDevice && !isMinimized && inputRef.current) {
-      inputRef.current.focus();
-    }
-  }, [activeTerminalDevice, isMinimized, activeTabId]);
-
-  // Global keyboard listener for Alt+Number tab switching
-  useEffect(() => {
-    if (!activeTerminalDevice) return;
-
-    const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      // Alt+Number for tab switching (1-9)
-      if (e.altKey && e.key >= '1' && e.key <= '9') {
-        e.preventDefault();
-        const tabIndex = parseInt(e.key, 10) - 1;
-        if (tabIndex < terminalTabs.length) {
-          setActiveTerminalTab(tabIndex);
-          inputRef.current?.focus();
-        }
-      }
-      // Alt+W to close current tab
-      if (e.altKey && e.key === 'w') {
-        e.preventDefault();
-        if (activeTabId) {
-          removeTerminalTab(activeTabId);
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleGlobalKeyDown);
-    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [activeTerminalDevice, terminalTabs.length, setActiveTerminalTab, activeTabId, removeTerminalTab]);
-
-  // Handle command execution
   const executeCommand = useCallback(async () => {
-    if (!activeTabId) return;
+    if (!activeTabId || !activeDeviceId) return;
     const cmd = inputValue.trim();
     if (!cmd || isExecuting) return;
 
-    // Add to command history for this tab
-    const currentState = tabStates.get(activeTabId) || { lines: [], commandHistory: [], historyIndex: -1 };
+    const currentState = getTabState(activeTabId);
     const newCommandHistory = [...currentState.commandHistory.filter((c) => c !== cmd), cmd];
     updateTabState(activeTabId, { commandHistory: newCommandHistory, historyIndex: -1 });
 
-    // Add input line
     setLines((prev) => [...prev, { type: 'input', content: cmd, timestamp: Date.now() }]);
     setInputValue('');
     setIsExecuting(true);
 
-    // Execute command
-    const result = await executeNetworkCommand(cmd, activeTerminalDevice, useNetworkStore.getState());
+    const result = await executeNetworkCommand(cmd, activeDeviceId, useNetworkStore.getState());
 
-    // Handle special signals
     if (result.output === 'EXIT_TERMINAL') {
       setIsExecuting(false);
-      // Close current tab instead of all tabs
-      if (activeTabId) {
-        removeTerminalTab(activeTabId);
-      }
+      removeTerminalTab(activeTabId);
       return;
     }
 
     if (result.output === 'CLEAR_TERMINAL') {
       setLines([]);
-      if (activeTerminalDevice) {
-        clearTerminalHistory(activeTerminalDevice);
-      }
+      clearTerminalHistory(activeDeviceId);
       setIsExecuting(false);
       return;
     }
 
-    // Add output line (skip empty outputs)
     if (result.output) {
       setLines((prev) => [
         ...prev,
@@ -231,18 +154,12 @@ export function Terminal() {
       ]);
     }
 
-    // Save to history
-    if (activeTerminalDevice) {
-      addTerminalHistory(activeTerminalDevice, cmd, result.output);
-    }
-
+    addTerminalHistory(activeDeviceId, cmd, result.output);
     setIsExecuting(false);
-  }, [inputValue, activeTerminalDevice, activeTabId, activeTerminalTabIndex, addTerminalHistory, clearTerminalHistory, removeTerminalTab, isExecuting, setLines, tabStates, updateTabState]);
+  }, [activeTabId, activeDeviceId, inputValue, isExecuting, getTabState, updateTabState, setLines, clearTerminalHistory, removeTerminalTab, addTerminalHistory]);
 
-  // Handle key events
   const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      // Alt+Number for tab switching (1-9)
+    (e: KeyboardEvent<HTMLInputElement>) => {
       if (e.altKey && e.key >= '1' && e.key <= '9') {
         e.preventDefault();
         const tabIndex = parseInt(e.key, 10) - 1;
@@ -273,23 +190,19 @@ export function Terminal() {
         }
       } else if (e.key === 'Tab') {
         e.preventDefault();
-        // Tab completion
         const completions = getCompletions(inputValue, activeDevice?.type);
 
         if (completions.length === 1) {
-          // Single match - complete it
           const parts = inputValue.trim().split(/\s+/);
           parts[parts.length - 1] = completions[0];
           setInputValue(parts.join(' ') + ' ');
         } else if (completions.length > 1) {
-          // Multiple matches - show options
           setLines((prev) => [
             ...prev,
             { type: 'input', content: `${getPrompt()}${inputValue}`, timestamp: Date.now() },
             { type: 'output', content: completions.join('  '), timestamp: Date.now() },
           ]);
 
-          // Find common prefix and complete to it
           const commonPrefix = completions.reduce((prefix, word) => {
             while (!word.startsWith(prefix)) {
               prefix = prefix.slice(0, -1);
@@ -312,7 +225,6 @@ export function Terminal() {
         e.preventDefault();
         setLines([]);
       } else if (e.key === 'w' && e.ctrlKey) {
-        // Ctrl+W: Close current tab
         e.preventDefault();
         if (activeTabId) {
           removeTerminalTab(activeTabId);
@@ -322,25 +234,22 @@ export function Terminal() {
     [executeCommand, commandHistory, historyIndex, inputValue, activeDevice, activeTabId, updateTabState, setLines, terminalTabs, setActiveTerminalTab, removeTerminalTab]
   );
 
-  // Clear terminal
   const handleClear = useCallback(() => {
     setLines([]);
-    if (activeTerminalDevice) {
-      clearTerminalHistory(activeTerminalDevice);
+    if (activeDeviceId) {
+      clearTerminalHistory(activeDeviceId);
     }
-  }, [activeTerminalDevice, clearTerminalHistory, setLines]);
+  }, [activeDeviceId, clearTerminalHistory, setLines]);
 
-  // Get prompt based on device
   const getPrompt = () => {
     if (!activeDevice) return 'netsim$ ';
-    const type = activeDevice.type;
-    if (type === 'router' || type === 'firewall') {
+    if (activeDevice.type === 'router' || activeDevice.type === 'firewall') {
       return `${activeDevice.hostname}# `;
     }
     return `${activeDevice.hostname}$ `;
   };
 
-  if (!activeTerminalDevice) return null;
+  if (!activeTerminalDevice || !activeTab) return null;
 
   return (
     <AnimatePresence>
@@ -349,10 +258,7 @@ export function Terminal() {
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: 100, opacity: 0 }}
         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-        className={`
-          fixed bottom-0 left-0 right-0 z-50
-          ${isMaximized ? 'top-0' : ''}
-        `}
+        className={`fixed bottom-0 left-0 right-0 z-50 ${isMaximized ? 'top-0' : ''}`}
       >
         <div
           className={`
@@ -362,25 +268,28 @@ export function Terminal() {
             transition-all duration-300 ease-out
           `}
         >
-          {/* Terminal Header with Tabs */}
-          <div className="flex flex-col border-b border-dark-700 bg-dark-800/50">
-            {/* Tabs Row - hidden when minimized */}
-            {!isMinimized && (
-              <div className="flex items-center h-10 px-2 gap-1 overflow-x-auto scrollbar-thin">
+          <div className="border-b border-dark-700 bg-dark-800/50">
+            <div className="flex items-center justify-between gap-2 px-2 h-10">
+              <div className="flex items-center gap-1 overflow-x-auto scrollbar-thin flex-1">
                 {terminalTabs.map((tab, index) => {
-                  const tabDevice = devices.find(d => d.id === tab.deviceId);
+                  const tabDevice = devices.find((d) => d.id === tab.deviceId);
                   const isActive = index === activeTerminalTabIndex;
                   return (
                     <div
                       key={tab.id}
                       className={`
-                        flex items-center gap-2 px-3 py-1.5 rounded-t text-sm cursor-pointer
-                        transition-colors min-w-[100px] max-w-[180px] group
+                        flex items-center gap-2 px-3 py-1.5 rounded text-sm cursor-pointer
+                        transition-colors min-w-[120px] max-w-[220px] group
                         ${isActive
-                          ? 'bg-dark-900 text-white border-t border-l border-r border-dark-600'
+                          ? 'bg-dark-900 text-white border border-dark-600'
                           : 'bg-dark-700/50 text-dark-300 hover:bg-dark-700 hover:text-white'}
                       `}
-                      onClick={() => setActiveTerminalTab(index)}
+                      onClick={() => {
+                        if (isMinimized) {
+                          setTerminalMinimized(false);
+                        }
+                        setActiveTerminalTab(index);
+                      }}
                       title={`${tabDevice?.name || 'Terminal'} (Alt+${index + 1})`}
                     >
                       <TerminalIcon className={`w-3 h-3 flex-shrink-0 ${isActive ? 'text-emerald-500' : 'text-dark-400'}`} />
@@ -401,21 +310,6 @@ export function Terminal() {
                   );
                 })}
               </div>
-            )}
-
-            {/* Controls Row */}
-            <div className="flex items-center justify-between px-4 h-10 bg-dark-900/50">
-              <div className="flex items-center gap-2">
-                <TerminalIcon className="w-4 h-4 text-emerald-500" />
-                {activeDevice && (
-                  <>
-                    <span className="text-sm text-white font-medium">{activeDevice.name}</span>
-                    <span className="px-2 py-0.5 text-xs bg-dark-700 rounded text-dark-300">
-                      {activeDevice.type.toUpperCase()}
-                    </span>
-                  </>
-                )}
-              </div>
 
               <div className="flex items-center gap-1">
                 <button
@@ -426,15 +320,11 @@ export function Terminal() {
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
                 <button
-                  onClick={() => setIsMinimized(!isMinimized)}
+                  onClick={() => setTerminalMinimized(!isMinimized)}
                   className="p-1 text-dark-400 hover:text-white hover:bg-dark-700 rounded transition-colors"
                   title={isMinimized ? 'Expand' : 'Minimize'}
                 >
-                  {isMinimized ? (
-                    <ChevronUp className="w-3.5 h-3.5" />
-                  ) : (
-                    <ChevronDown className="w-3.5 h-3.5" />
-                  )}
+                  {isMinimized ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                 </button>
                 <button
                   onClick={() => setIsMaximized(!isMaximized)}
@@ -454,10 +344,8 @@ export function Terminal() {
             </div>
           </div>
 
-          {/* Terminal Body */}
           {!isMinimized && (
-            <div className="flex flex-col h-[calc(100%-4.5rem)]">
-              {/* Output area */}
+            <div className="flex flex-col h-[calc(100%-2.5rem)]">
               <div
                 ref={outputRef}
                 className="flex-1 overflow-y-auto p-4 font-mono text-sm"
@@ -465,7 +353,7 @@ export function Terminal() {
               >
                 {lines.map((line, index) => (
                   <div
-                    key={index}
+                    key={`${line.timestamp}-${index}`}
                     className={`
                       whitespace-pre-wrap break-all
                       ${line.type === 'input' ? 'text-emerald-400' : ''}
@@ -474,15 +362,12 @@ export function Terminal() {
                       ${line.type === 'success' ? 'text-emerald-400' : ''}
                     `}
                   >
-                    {line.type === 'input' && (
-                      <span className="text-blue-400">{getPrompt()}</span>
-                    )}
+                    {line.type === 'input' && <span className="text-blue-400">{getPrompt()}</span>}
                     {line.content}
                   </div>
                 ))}
               </div>
 
-              {/* Input area */}
               <div className="flex items-center px-4 py-2 border-t border-dark-800 bg-dark-900">
                 <span className="text-blue-400 font-mono text-sm">{getPrompt()}</span>
                 <input

@@ -6,3 +6,4 @@ export { PropertiesPanel } from './PropertiesPanel';
 export { Terminal } from './Terminal';
 export { PacketAnimation } from './PacketAnimation';
 export { Notifications } from './Notifications';
+export { TutorialCoach } from './TutorialCoach';

@@ -30,12 +30,14 @@ import {
   ZoomOut,
   Maximize2,
   Grid3X3,
+  Activity,
 } from 'lucide-react';
 import { useNetworkStore } from '@/store/network-store';
 import { DeviceNode } from './DeviceNode';
 import { PacketAnimation } from './PacketAnimation';
 import { InterfaceSelectionModal } from './InterfaceSelectionModal';
 import type { NetworkDevice, DeviceType } from '@/types/network';
+import type { LinkStats } from '@/types/network';
 
 // Custom node types
 const nodeTypes = {
@@ -60,12 +62,14 @@ function NetworkCanvasInner() {
     devices,
     connections,
     selectedDeviceId,
+    selectedConnectionId,
     currentTool,
     setCurrentTool,
     addDevice,
     removeDevice,
     updateDevicePosition,
     selectDevice,
+    selectConnection,
     addConnection,
     removeConnection,
     connectionStart,
@@ -73,7 +77,11 @@ function NetworkCanvasInner() {
     cancelConnection,
     packets,
     simulation,
+    connectionStats,
   } = useNetworkStore();
+
+  const [hoveredConnectionId, setHoveredConnectionId] = useState<string | null>(null);
+  const [overlayMode, setOverlayMode] = useState<'none' | 'vlan' | 'stp'>('none');
 
   // Convert devices to React Flow nodes
   const nodes: Node[] = useMemo(() => {
@@ -93,11 +101,24 @@ function NetworkCanvasInner() {
         (p) => p.path.includes(conn.sourceDeviceId) && p.path.includes(conn.targetDeviceId)
       );
 
+      const stats: LinkStats | undefined = connectionStats[conn.id];
+      const recentLoss = stats?.lossHistory?.[stats.lossHistory.length - 1] ?? 0;
+      const lossPulse = recentLoss > 0;
+
       // Get interface names for labels
       const sourceDevice = devices.find((d) => d.id === conn.sourceDeviceId);
       const targetDevice = devices.find((d) => d.id === conn.targetDeviceId);
       const sourceIface = sourceDevice?.interfaces.find((i) => i.id === conn.sourceInterfaceId);
       const targetIface = targetDevice?.interfaces.find((i) => i.id === conn.targetInterfaceId);
+
+      // Overlay-driven styling
+      const primaryVlan = sourceIface?.vlanMode === 'access' ? sourceIface.accessVlan : sourceIface?.nativeVlan;
+      const vlanColors = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', '#22c55e'];
+      const vlanStroke = primaryVlan ? vlanColors[primaryVlan % vlanColors.length] : '#565869';
+
+      const sourceStpState = sourceDevice?.stpConfig?.ports.find((p) => p.interfaceId === sourceIface?.id)?.state;
+      const targetStpState = targetDevice?.stpConfig?.ports.find((p) => p.interfaceId === targetIface?.id)?.state;
+      const isBlocked = sourceStpState === 'blocking' || targetStpState === 'blocking';
 
       // Calculate best handles
       let sourceHandle = 'bottom-source';
@@ -150,11 +171,17 @@ function NetworkCanvasInner() {
         labelBgBorderRadius: 4,
         style: {
           strokeWidth: 2,
-          stroke: conn.isUp ? (hasTraffic ? '#3b82f6' : '#565869') : '#f43f5e',
+          stroke: overlayMode === 'vlan'
+            ? vlanStroke
+            : overlayMode === 'stp'
+              ? isBlocked ? '#4b5563' : '#22d3ee'
+              : conn.isUp ? (hasTraffic ? '#3b82f6' : '#565869') : '#f43f5e',
+          strokeDasharray: overlayMode === 'stp' && isBlocked ? '6 4' : undefined,
+          filter: lossPulse ? 'drop-shadow(0 0 6px #f43f5e)' : undefined,
         },
       };
     });
-  }, [connections, devices, packets, simulation.isRunning]);
+  }, [connections, devices, packets, simulation.isRunning, overlayMode, connectionStats]);
 
   const [localNodes, setLocalNodes, onNodesChange] = useNodesState(nodes);
   const [localEdges, setLocalEdges, onEdgesChange] = useEdgesState(edges);
@@ -229,16 +256,27 @@ function NetworkCanvasInner() {
     (_: React.MouseEvent, edge: Edge) => {
       if (currentTool === 'delete') {
         removeConnection(edge.id);
+      } else {
+        selectConnection(edge.id);
       }
     },
-    [currentTool, removeConnection]
+    [currentTool, removeConnection, selectConnection]
   );
 
   // Handle pane click
   const onPaneClick = useCallback(() => {
     selectDevice(null);
+    selectConnection(null);
     cancelConnection();
-  }, [selectDevice, cancelConnection]);
+  }, [selectDevice, selectConnection, cancelConnection]);
+
+  const onEdgeMouseEnter = useCallback((_, edge: Edge) => {
+    setHoveredConnectionId(edge.id);
+  }, []);
+
+  const onEdgeMouseLeave = useCallback(() => {
+    setHoveredConnectionId(null);
+  }, []);
 
   // Handle drop for new devices
   const onDrop = useCallback(
@@ -273,6 +311,8 @@ function NetworkCanvasInner() {
         onConnect={onConnect}
         onNodeClick={onNodeClick}
         onEdgeClick={onEdgeClick}
+        onEdgeMouseEnter={onEdgeMouseEnter}
+        onEdgeMouseLeave={onEdgeMouseLeave}
         onPaneClick={onPaneClick}
         onDrop={onDrop}
         onDragOver={onDragOver}
@@ -366,10 +406,113 @@ function NetworkCanvasInner() {
           </div>
         </Panel>
 
+        {/* Overlay toggles */}
+        <Panel position="top-right" className="!m-4 !mt-24">
+          <div className="flex gap-2 p-2 bg-dark-800/90 backdrop-blur-sm rounded-xl border border-dark-600 shadow-xl">
+            <ToolButton
+              icon={Grid3X3}
+              active={overlayMode === 'none'}
+              onClick={() => setOverlayMode('none')}
+              tooltip="No Overlay"
+            />
+            <ToolButton
+              icon={Cable}
+              active={overlayMode === 'vlan'}
+              onClick={() => setOverlayMode('vlan')}
+              tooltip="VLAN Overlay"
+            />
+            <ToolButton
+              icon={Activity}
+              active={overlayMode === 'stp'}
+              onClick={() => setOverlayMode('stp')}
+              tooltip="STP Overlay"
+            />
+          </div>
+        </Panel>
+
       </ReactFlow>
 
       {/* Packet Animations */}
       <PacketAnimation />
+
+      {/* Link diagnostics panel */}
+      <AnimatePresence>
+        {(hoveredConnectionId || selectedConnectionId) && (
+          <motion.div
+            key={hoveredConnectionId || selectedConnectionId!}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            className="absolute bottom-4 left-1/2 -translate-x-1/2 w-[420px] max-w-[90%] p-4 rounded-xl border border-dark-600 bg-dark-900/90 backdrop-blur shadow-2xl"
+          >
+            {(() => {
+              const connId = hoveredConnectionId || selectedConnectionId!;
+              const conn = connections.find((c) => c.id === connId);
+              if (!conn) return null;
+              const stats: LinkStats | undefined = connectionStats[conn.id];
+              const sourceDevice = devices.find((d) => d.id === conn.sourceDeviceId);
+              const targetDevice = devices.find((d) => d.id === conn.targetDeviceId);
+              const srcIface = sourceDevice?.interfaces.find((i) => i.id === conn.sourceInterfaceId);
+              const dstIface = targetDevice?.interfaces.find((i) => i.id === conn.targetInterfaceId);
+
+              const sparkline = (data: number[], color: string) => {
+                if (!data || data.length === 0) return null;
+                const max = Math.max(1, ...data);
+                const points = data.map((v, i) => {
+                  const x = (i / Math.max(1, data.length - 1)) * 100;
+                  const y = 24 - (v / max) * 24;
+                  return `${x},${y}`;
+                }).join(' ');
+                return (
+                  <svg viewBox="0 0 100 24" className="w-full h-10">
+                    <polyline
+                      points={points}
+                      fill="none"
+                      stroke={color}
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                );
+              };
+
+              return (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-sm text-dark-200 font-semibold">
+                      Link {sourceDevice?.name}:{srcIface?.name} ↔ {targetDevice?.name}:{dstIface?.name}
+                    </div>
+                    <div className="text-xs text-dark-400">bw {conn.bandwidth} Mbps · {conn.latency} ms · loss {conn.packetLoss}%</div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3 text-xs text-dark-200">
+                    <div className="p-3 rounded-lg border border-dark-700 bg-dark-800/70">
+                      <div className="text-[11px] uppercase text-dark-400 mb-1">Loss</div>
+                      {sparkline(stats?.lossHistory ?? [], '#f43f5e')}
+                      <div className="flex justify-between mt-1 text-[11px] text-dark-400">
+                        <span>drops {stats?.drops ?? 0}</span>
+                        <span>samples {stats?.lossHistory?.length ?? 0}</span>
+                      </div>
+                    </div>
+                    <div className="p-3 rounded-lg border border-dark-700 bg-dark-800/70">
+                      <div className="text-[11px] uppercase text-dark-400 mb-1">RTT</div>
+                      {sparkline(stats?.rttHistory ?? [], '#10b981')}
+                      <div className="flex justify-between mt-1 text-[11px] text-dark-400">
+                        <span>min {Math.min(...(stats?.rttHistory ?? [0]))} ms</span>
+                        <span>max {Math.max(...(stats?.rttHistory ?? [0]))} ms</span>
+                      </div>
+                    </div>
+                    <div className="p-3 rounded-lg border border-dark-700 bg-dark-800/70">
+                      <div className="text-[11px] uppercase text-dark-400 mb-1">Counts</div>
+                      <div className="text-sm">delivered {stats?.delivered ?? 0}</div>
+                      <div className="text-sm">dropped {stats?.drops ?? 0}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Connection Modal */}
       <AnimatePresence>

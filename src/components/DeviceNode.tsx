@@ -102,7 +102,7 @@ function DeviceNodeComponent({ data, selected }: NodeProps & { data: DeviceNodeD
       {/* Main container */}
       <div
         className={`
-          relative bg-dark-800 rounded-xl p-4 min-w-[140px]
+          relative bg-dark-800 rounded-xl p-3 min-w-[140px]
           border border-dark-600 shadow-xl
           transition-all duration-200
           ${selected ? `ring-2 ring-offset-2 ring-offset-dark-900 ring-blue-500 shadow-2xl ${glowClass}` : ''}
@@ -132,12 +132,37 @@ function DeviceNodeComponent({ data, selected }: NodeProps & { data: DeviceNodeD
 
         {/* Device name */}
         <div className="text-center">
-          <h3 className="text-sm font-semibold text-white truncate max-w-[120px]">
+          <h3 className="text-sm font-semibold text-white truncate max-w-[120px] mx-auto">
             {device.name}
           </h3>
           <p className="text-xs text-dark-400 font-mono mt-0.5">
             {primaryIP}
           </p>
+        </div>
+
+        {/* Interface badges (ultra-compact, capped to 2) */}
+        <div className="mt-2 flex flex-wrap gap-1 justify-center max-h-7 overflow-hidden">
+          {device.interfaces.slice(0, 2).map((iface) => {
+            const stpState = device.stpConfig?.ports.find((p) => p.interfaceId === iface.id)?.state;
+            const vlanLabel = iface.vlanMode === 'trunk'
+              ? `T${iface.nativeVlan ?? 1}`
+              : `V${iface.accessVlan ?? iface.vlan ?? 1}`;
+            const stateLabel = iface.isUp ? 'up' : 'down';
+            return (
+              <span
+                key={iface.id}
+                className={`px-1 py-0.5 text-[9px] rounded border leading-none ${iface.isUp ? 'border-emerald-500/30 text-emerald-200' : 'border-rose-500/30 text-rose-200'} bg-dark-700/70 whitespace-nowrap`}
+                title={`${iface.name} · ${stateLabel} · ${vlanLabel}${stpState ? ' · ' + stpState.toUpperCase() : ''}`}
+              >
+                {iface.name} {vlanLabel}{stpState ? ` ${stpState.toUpperCase()}` : ''}
+              </span>
+            );
+          })}
+          {device.interfaces.length > 2 && (
+            <span className="px-1 py-0.5 text-[9px] rounded border border-dark-600 text-dark-300 bg-dark-700/70 whitespace-nowrap">
+              +{device.interfaces.length - 2}
+            </span>
+          )}
         </div>
 
         {/* Quick actions (visible on hover) */}
