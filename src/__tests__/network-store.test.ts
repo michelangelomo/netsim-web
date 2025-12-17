@@ -465,38 +465,58 @@ describe('Network Store', () => {
       expect(mac).toBe('02:AA:BB:CC:DD:EE');
     });
 
-    it('should resolve ARP by finding device with IP', () => {
+    it('should resolve ARP only for same subnet and L2-reachable host', () => {
       const store = useNetworkStore.getState();
       const pc1 = useNetworkStore.getState().addDevice('pc', { x: 0, y: 0 });
+      const sw = useNetworkStore.getState().addDevice('switch', { x: 50, y: 0 });
       const pc2 = useNetworkStore.getState().addDevice('pc', { x: 100, y: 0 });
 
+      useNetworkStore.getState().configureInterface(pc1.id, pc1.interfaces[0].id, {
+        ipAddress: '192.168.1.10',
+        subnetMask: '255.255.255.0',
+      });
       useNetworkStore.getState().configureInterface(pc2.id, pc2.interfaces[0].id, {
         ipAddress: '192.168.1.20',
         subnetMask: '255.255.255.0',
       });
+
+      // Wire both PCs to the switch (same L2 domain)
+      useNetworkStore.getState().addConnection(pc1.id, pc1.interfaces[0].id, sw.id, sw.interfaces[0].id);
+      useNetworkStore.getState().addConnection(pc2.id, pc2.interfaces[0].id, sw.id, sw.interfaces[1].id);
 
       const mac = useNetworkStore.getState().resolveARP(pc1.id, '192.168.1.20');
 
-      // Should find pc2's MAC
       const pc2Mac = useNetworkStore.getState().getDeviceById(pc2.id)!.interfaces[0].macAddress;
       expect(mac).toBe(pc2Mac);
-    });
-
-    it('should add entry to ARP table after resolution', () => {
-      const store = useNetworkStore.getState();
-      const pc1 = useNetworkStore.getState().addDevice('pc', { x: 0, y: 0 });
-      const pc2 = useNetworkStore.getState().addDevice('pc', { x: 100, y: 0 });
-
-      useNetworkStore.getState().configureInterface(pc2.id, pc2.interfaces[0].id, {
-        ipAddress: '192.168.1.20',
-        subnetMask: '255.255.255.0',
-      });
-
-      useNetworkStore.getState().resolveARP(pc1.id, '192.168.1.20');
 
       const updated = useNetworkStore.getState().getDeviceById(pc1.id)!;
       expect(updated.arpTable!.length).toBe(1);
       expect(updated.arpTable![0].ipAddress).toBe('192.168.1.20');
+    });
+
+    it('should refuse ARP across different subnets', () => {
+      const store = useNetworkStore.getState();
+      const pc1 = useNetworkStore.getState().addDevice('pc', { x: 0, y: 0 });
+      const pc2 = useNetworkStore.getState().addDevice('pc', { x: 100, y: 0 });
+      const sw = useNetworkStore.getState().addDevice('switch', { x: 50, y: 0 });
+
+      useNetworkStore.getState().configureInterface(pc1.id, pc1.interfaces[0].id, {
+        ipAddress: '192.168.1.10',
+        subnetMask: '255.255.255.0',
+      });
+      useNetworkStore.getState().configureInterface(pc2.id, pc2.interfaces[0].id, {
+        ipAddress: '10.0.0.20',
+        subnetMask: '255.255.255.0',
+      });
+
+      useNetworkStore.getState().addConnection(pc1.id, pc1.interfaces[0].id, sw.id, sw.interfaces[0].id);
+      useNetworkStore.getState().addConnection(pc2.id, pc2.interfaces[0].id, sw.id, sw.interfaces[1].id);
+
+      const mac = useNetworkStore.getState().resolveARP(pc1.id, '10.0.0.20');
+      expect(mac).toBeNull();
+
+      const updated = useNetworkStore.getState().getDeviceById(pc1.id)!;
+      expect(updated.arpTable ?? []).toHaveLength(0);
     });
 
     it('should return null for unknown IP', () => {

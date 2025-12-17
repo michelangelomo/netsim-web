@@ -347,7 +347,7 @@ describe('TCP Simulation', () => {
 
             const serverDevice = store.getDeviceById(server.id);
             const conn = serverDevice?.tcpConnections?.find(
-                (c) => c.remoteIP === '192.168.1.10' && c.state === 'SYN_RECV'
+                (c) => c.remoteIP === '192.168.1.10' && (c.state === 'SYN_RECV' || c.state === 'ESTABLISHED')
             );
             expect(conn).toBeDefined();
         });

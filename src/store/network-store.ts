@@ -1186,21 +1186,40 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
     const cached = device.arpTable?.find((e) => e.ipAddress === targetIP);
     if (cached) return cached.macAddress;
 
-    // Find device with target IP
+    // Choose a source interface with IP config to determine subnet scope
+    const sourceIface = device.interfaces.find((i) => i.ipAddress && i.subnetMask && i.isUp && i.connectedTo);
+    if (!sourceIface || !sourceIface.ipAddress || !sourceIface.subnetMask) return null;
+
+    // Target must be in the same subnet
+    if (!isSameNetwork(sourceIface.ipAddress, targetIP, sourceIface.subnetMask)) return null;
+
+    // Find device with target IP on an interface in that subnet
     const targetDevice = get().getDeviceByIP(targetIP);
     if (!targetDevice) return null;
 
-    const targetInterface = targetDevice.interfaces.find((i) => i.ipAddress === targetIP);
-    if (!targetInterface) return null;
+    const targetInterface = targetDevice.interfaces.find(
+      (i) => i.ipAddress === targetIP && i.subnetMask && isSameNetwork(i.ipAddress, sourceIface.ipAddress!, i.subnetMask)
+    );
+    if (!targetInterface || !targetInterface.isUp || !targetInterface.connectedTo) return null;
 
-    // Add to ARP table
-    get().updateArpTable(deviceId, {
+    // Ensure L2 reachability (broadcast domain) via only switches/hubs
+    const reachableInterfaceIds = getReachableL2InterfaceIdsFromInterface(
+      device.id,
+      sourceIface.id,
+      get().devices,
+      get().connections
+    );
+    if (!reachableInterfaceIds.has(targetInterface.id)) return null;
+
+    const entry: ArpEntry = {
       ipAddress: targetIP,
       macAddress: targetInterface.macAddress,
-      interface: device.interfaces[0]?.name || 'eth0',
+      interface: sourceIface.name,
       type: 'dynamic',
       age: 0,
-    });
+    };
+
+    get().updateArpTable(deviceId, entry);
 
     return targetInterface.macAddress;
   },

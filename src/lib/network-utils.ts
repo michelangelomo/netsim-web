@@ -221,8 +221,8 @@ export function calculateChecksum(data: number[]): number {
 export function findBestRoute(
   destIP: string,
   routes: Array<{ destination: string; netmask: string; gateway: string; metric: number; interface: string }>
-): { gateway: string; metric: number; interface: string } | null {
-  let bestRoute: { gateway: string; metric: number; prefixLen: number; interface: string } | null = null;
+): { gateway: string; metric: number; interface: string; destination: string; netmask: string } | null {
+  let bestRoute: { gateway: string; metric: number; prefixLen: number; interface: string; destination: string; netmask: string } | null = null;
 
   for (const route of routes) {
     const destNum = ipToNumber(destIP);
@@ -240,13 +240,23 @@ export function findBestRoute(
           gateway: route.gateway,
           metric: route.metric,
           interface: route.interface,
+          destination: route.destination,
+          netmask: route.netmask,
           prefixLen
         };
       }
     }
   }
 
-  return bestRoute ? { gateway: bestRoute.gateway, metric: bestRoute.metric, interface: bestRoute.interface } : null;
+  return bestRoute
+    ? {
+      gateway: bestRoute.gateway,
+      metric: bestRoute.metric,
+      interface: bestRoute.interface,
+      destination: bestRoute.destination,
+      netmask: bestRoute.netmask,
+    }
+    : null;
 }
 
 // Default gateway device names by type

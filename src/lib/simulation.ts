@@ -246,6 +246,7 @@ function processTcpPacket(
             progress: 0,
             path: [],
             currentPathIndex: 0,
+            isLocallyGenerated: true,
         };
 
         responsePackets.push(synAckPacket);
@@ -287,6 +288,7 @@ function processTcpPacket(
                 progress: 0,
                 path: [],
                 currentPathIndex: 0,
+                isLocallyGenerated: true,
             };
 
             responsePackets.push(ackPacket);
@@ -352,6 +354,7 @@ function processTcpPacket(
                 progress: 0,
                 path: [],
                 currentPathIndex: 0,
+                isLocallyGenerated: true,
             };
             responsePackets.push(ackPacket);
 
@@ -806,21 +809,19 @@ function processSviPacket(
 // Find the best route for an IP address
 function findRouteForIP(device: NetworkDevice, destIP: string): { destination: string; interface?: string } | null {
     const routes = device.routingTable || [];
+    const best = findBestRoute(destIP, routes);
 
-    for (const route of routes) {
-        const routeNet = route.destination;
-        const routeMask = route.netmask || '255.255.255.0';
+    if (!best) return null;
 
-        // Check if destIP is in this network
-        const destNetwork = getNetworkAddress(destIP, routeMask);
-        if (destNetwork === routeNet) {
-            return route;
-        }
-    }
+    // Try to return the exact matching RouteEntry when available to keep interface naming consistent
+    const matched = routes.find((r) =>
+        r.interface === best.interface &&
+        r.gateway === best.gateway &&
+        r.netmask === best.netmask &&
+        getNetworkAddress(destIP, r.netmask) === r.destination
+    ) || routes.find((r) => r.interface === best.interface && r.netmask === best.netmask) || routes.find((r) => r.interface === best.interface);
 
-    // Check for default route
-    const defaultRoute = routes.find(r => r.destination === '0.0.0.0');
-    return defaultRoute || null;
+    return matched ? { destination: matched.destination, interface: matched.interface } : { destination: best.destination, interface: best.interface };
 }
 
 function processSwitchLogic(
@@ -1145,8 +1146,8 @@ function processL3Logic(
                         senderIP: targetInterface.ipAddress,
                         targetIP: payload.senderIP,
                     },
+                    isLocallyGenerated: true,
                 };
-
                 // Prefer sending it immediately on the link (when we have connection info)
                 const outConn = connections.find(
                     (c) => c.sourceInterfaceId === targetInterface.id || c.targetInterfaceId === targetInterface.id
@@ -1225,6 +1226,9 @@ function processL3Logic(
         if (isForMe) {
             // Handle TCP packets
             if (packet.type === 'tcp') {
+                // Keep an arrival copy so higher layers/tests can observe delivered TCP segments
+                resultPackets.push({ ...packet, processingStage: 'arrived', progress: 0 });
+
                 const tcpResult = processTcpPacket(device, packet, updateDevice);
                 if (tcpResult) {
                     resultPackets.push(...tcpResult.responsePackets);
@@ -1322,24 +1326,20 @@ function processL3Logic(
             egressInterface = connectedInterface;
         } else {
             // 2. Check Routing Table
-            let route: RouteEntry | undefined;
-            if (device.routingTable) {
-                const found = findBestRoute(packet.destIP, device.routingTable);
-                if (found) {
-                    route = {
-                        destination: packet.destIP, // Not exactly true but sufficient for nextHop
-                        netmask: '255.255.255.255',
-                        gateway: found.gateway,
-                        metric: found.metric,
-                        interface: found.interface,
-                        type: 'static'
-                    };
-                }
-            }
+            const found = device.routingTable ? findBestRoute(packet.destIP, device.routingTable) : null;
 
-            // 3. Check Default Gateway (from Interface)
-            if (!route) {
-                // Find an interface with a gateway configured
+            // 3. Check Default Gateway (from Interface) if no explicit route
+            let route: RouteEntry | undefined;
+            if (found) {
+                route = {
+                    destination: found.destination,
+                    netmask: found.netmask,
+                    gateway: found.gateway,
+                    metric: found.metric,
+                    interface: found.interface,
+                    type: 'static',
+                };
+            } else {
                 const defaultInterface = device.interfaces.find((i) => i.gateway);
                 if (defaultInterface && defaultInterface.gateway) {
                     route = {
@@ -1514,16 +1514,34 @@ export function processLinkTick(
         return packet;
     }
 
-    // Find connection to determine bandwidth/latency (optional, for now just use speed)
-    // We could use connection.bandwidth to adjust speed.
+    const connection = connections.find(
+        (c) => c.isUp &&
+            ((c.sourceDeviceId === packet.currentDeviceId && c.targetDeviceId === packet.targetDeviceId) ||
+                (c.targetDeviceId === packet.currentDeviceId && c.sourceDeviceId === packet.targetDeviceId))
+    );
 
-    const newProgress = packet.progress + (simulationSpeed * 2); // 2% per tick at 1x speed
+    const bandwidthMbps = connection?.bandwidth ?? 1000; // default 1 Gbps
+    const latencyMs = connection?.latency ?? 1;
+    const lossPct = connection?.packetLoss ?? 0;
+
+    if (lossPct > 0 && Math.random() < lossPct / 100) {
+        return { ...packet, processingStage: 'dropped' };
+    }
+
+    const bits = (packet.size || 0) * 8;
+    const serializationMs = bandwidthMbps > 0 ? (bits / (bandwidthMbps * 1_000_000)) * 1000 : 0;
+    const linkTimeMs = latencyMs + serializationMs;
+
+    const frameMs = 16.67; // rough 60fps tick
+    const ticksNeeded = Math.max(1, linkTimeMs / frameMs);
+    const increment = (100 / ticksNeeded) * simulationSpeed;
+
+    const newProgress = packet.progress + increment;
 
     if (newProgress >= 100) {
-        // Arrived at target
         return {
             ...packet,
-            lastDeviceId: packet.currentDeviceId, // The device it just left
+            lastDeviceId: packet.currentDeviceId,
             currentDeviceId: packet.targetDeviceId,
             targetDeviceId: undefined,
             processingStage: 'at-device',

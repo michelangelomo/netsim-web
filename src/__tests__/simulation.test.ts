@@ -490,6 +490,51 @@ describe('Simulation Engine', () => {
     });
 
     describe('IP Routing', () => {
+      it('should not decrement TTL for locally generated traffic on first hop', () => {
+        const router = createMockRouter({
+          arpTable: [
+            { ipAddress: '10.0.0.2', macAddress: '02:CC:CC:CC:CC:CC', interface: 'GigabitEthernet0/0', type: 'dynamic', age: 0 },
+          ],
+          routingTable: [
+            { destination: '192.168.1.0', netmask: '255.255.255.0', gateway: '0.0.0.0', interface: 'GigabitEthernet0/0', metric: 0, type: 'connected' },
+            { destination: '10.0.0.0', netmask: '255.255.255.0', gateway: '0.0.0.0', interface: 'GigabitEthernet0/1', metric: 0, type: 'connected' },
+            { destination: '0.0.0.0', netmask: '0.0.0.0', gateway: '10.0.0.2', interface: 'GigabitEthernet0/0', metric: 1, type: 'static' },
+          ],
+        });
+
+        const packet = createMockPacket({
+          currentDeviceId: router.id,
+          sourceMAC: router.interfaces[0].macAddress, // Locally generated on Gi0/0
+          destMAC: '00:00:00:00:00:00', // Placeholder to trigger routing
+          sourceIP: router.interfaces[0].ipAddress!,
+          destIP: '8.8.8.8',
+          ttl: 64,
+          isLocallyGenerated: true,
+        });
+
+        const connections: Connection[] = [
+          {
+            id: 'conn-out',
+            sourceDeviceId: router.id,
+            sourceInterfaceId: router.interfaces[0].id,
+            targetDeviceId: 'upstream-router',
+            targetInterfaceId: 'upstream-iface',
+            isUp: true,
+            bandwidth: 1000,
+            latency: 1,
+            packetLoss: 0,
+          },
+        ];
+
+        const result = processDeviceTick(router, packet, connections, mockUpdateDevice);
+
+        expect(result.length).toBe(1);
+        const forwarded = result[0];
+        expect(forwarded.processingStage).toBe('on-link');
+        expect(forwarded.ttl).toBe(64); // No TTL decrement on the originating node
+        expect(forwarded.destMAC).toBe('02:CC:CC:CC:CC:CC');
+      });
+
       it('should route packets to directly connected networks', () => {
         const router = createMockRouter({
           arpTable: [
@@ -657,6 +702,98 @@ describe('Simulation Engine', () => {
         // Should be forwarded to next-hop MAC (10.0.0.254's MAC)
         expect(forwarded.destMAC).toBe('02:BB:BB:BB:BB:BB');
         expect(forwarded.targetDeviceId).toBe('next-hop-router');
+      });
+
+      it('should prefer most specific route when routing via SVIs', () => {
+        const switchL3: NetworkDevice = {
+          id: 'lsw-1',
+          type: 'switch',
+          name: 'L3Switch',
+          hostname: 'l3switch',
+          interfaces: [
+            {
+              id: 'sw-if-acc',
+              name: 'FastEthernet0/0',
+              macAddress: '02:00:00:00:10:10',
+              ipAddress: null,
+              subnetMask: null,
+              gateway: null,
+              isUp: true,
+              speed: 100,
+              duplex: 'full',
+              vlanMode: 'access',
+              accessVlan: 10,
+              connectedTo: 'host-iface',
+            },
+            {
+              id: 'sw-if-trunk',
+              name: 'FastEthernet0/1',
+              macAddress: '02:00:00:00:20:20',
+              ipAddress: null,
+              subnetMask: null,
+              gateway: null,
+              isUp: true,
+              speed: 100,
+              duplex: 'full',
+              vlanMode: 'trunk',
+              allowedVlans: [10, 20],
+              nativeVlan: 10,
+              connectedTo: 'next-hop-trunk',
+            },
+          ],
+          position: { x: 0, y: 0 },
+          isRunning: true,
+          macTable: [],
+          sviInterfaces: [
+            { vlanId: 10, ipAddress: '10.10.0.1', subnetMask: '255.255.0.0', macAddress: 'AA:AA:AA:AA:AA:10', isUp: true },
+            { vlanId: 20, ipAddress: '10.20.0.1', subnetMask: '255.255.0.0', macAddress: 'AA:AA:AA:AA:AA:20', isUp: true },
+          ],
+          routingTable: [
+            { destination: '0.0.0.0', netmask: '0.0.0.0', gateway: '10.10.0.254', interface: 'Vlan10', metric: 50, type: 'static' },
+            { destination: '10.20.0.0', netmask: '255.255.0.0', gateway: '0.0.0.0', interface: 'Vlan20', metric: 100, type: 'connected' },
+          ],
+          arpTable: [],
+          config: {},
+        };
+
+        const packet = createMockPacket({
+          id: 'pkt-svi',
+          currentDeviceId: switchL3.id,
+          lastDeviceId: 'host-1',
+          sourceMAC: '02:11:22:33:44:55',
+          destMAC: 'AA:AA:AA:AA:AA:10', // Sent to SVI in VLAN 10 (default gateway)
+          sourceIP: '10.10.5.5',
+          destIP: '10.20.5.5', // Matches the more specific 10.20.0.0/16 route
+          ttl: 64,
+          vlanTag: 10,
+          processingStage: 'at-device',
+        });
+
+        const connections: Connection[] = [
+          {
+            id: 'conn-trunk',
+            sourceDeviceId: switchL3.id,
+            sourceInterfaceId: 'sw-if-trunk',
+            targetDeviceId: 'next-hop',
+            targetInterfaceId: 'next-hop-iface',
+            isUp: true,
+            bandwidth: 1000,
+            latency: 1,
+            packetLoss: 0,
+          },
+        ];
+
+        const result = processDeviceTick(switchL3, packet, connections, mockUpdateDevice);
+
+        const arpRequest = result.find((p) => p.type === 'arp');
+        expect(arpRequest).toBeDefined();
+        expect(arpRequest!.sourceMAC).toBe('AA:AA:AA:AA:AA:20'); // Should egress via Vlan20 (more specific route)
+        expect(arpRequest!.vlanTag).toBe(20);
+        expect(arpRequest!.targetDeviceId).toBe('next-hop');
+
+        const buffered = result.find((p) => p.processingStage === 'buffered');
+        expect(buffered).toBeDefined();
+        expect((buffered as Packet).waitingForArp).toBe('10.20.5.5');
       });
     });
 
@@ -858,10 +995,26 @@ describe('Simulation Engine', () => {
         const packet = createMockPacket({
           processingStage: 'on-link',
           targetDeviceId: 'target-device',
+          currentDeviceId: 'device-1',
           progress: 0,
+          size: 1500,
         });
 
-        const result = processLinkTick(packet, [], 1);
+        const connections: Connection[] = [
+          {
+            id: 'c1',
+            sourceDeviceId: 'device-1',
+            sourceInterfaceId: 'iface-a',
+            targetDeviceId: 'target-device',
+            targetInterfaceId: 'iface-b',
+            isUp: true,
+            bandwidth: 10,
+            latency: 50,
+            packetLoss: 0,
+          },
+        ];
+
+        const result = processLinkTick(packet, connections, 1);
 
         expect(result.progress).toBeGreaterThan(0);
         expect(result.processingStage).toBe('on-link');
@@ -875,7 +1028,21 @@ describe('Simulation Engine', () => {
           progress: 99,
         });
 
-        const result = processLinkTick(packet, [], 1);
+        const connections: Connection[] = [
+          {
+            id: 'c1',
+            sourceDeviceId: 'source-device',
+            sourceInterfaceId: 'iface-a',
+            targetDeviceId: 'target-device',
+            targetInterfaceId: 'iface-b',
+            isUp: true,
+            bandwidth: 100,
+            latency: 1,
+            packetLoss: 0,
+          },
+        ];
+
+        const result = processLinkTick(packet, connections, 1);
 
         expect(result.processingStage).toBe('at-device');
         expect(result.currentDeviceId).toBe('target-device');
@@ -888,13 +1055,85 @@ describe('Simulation Engine', () => {
         const packet = createMockPacket({
           processingStage: 'on-link',
           targetDeviceId: 'target-device',
+          currentDeviceId: 'device-1',
+          progress: 0,
+          size: 1500,
+        });
+
+        const connections: Connection[] = [
+          {
+            id: 'c1',
+            sourceDeviceId: 'device-1',
+            sourceInterfaceId: 'iface-a',
+            targetDeviceId: 'target-device',
+            targetInterfaceId: 'iface-b',
+            isUp: true,
+            bandwidth: 10,
+            latency: 50,
+            packetLoss: 0,
+          },
+        ];
+
+        const result1x = processLinkTick(packet, connections, 1);
+        const result2x = processLinkTick(packet, connections, 2);
+
+        expect(result2x.progress).toBeGreaterThan(result1x.progress);
+      });
+
+      it('should be slower on low bandwidth/high latency links', () => {
+        const packet = createMockPacket({
+          processingStage: 'on-link',
+          targetDeviceId: 'target-device',
+          currentDeviceId: 'source-device',
+          progress: 0,
+          size: 1_000_000,
+        });
+
+        const slowConn: Connection = {
+          id: 'slow',
+          sourceDeviceId: 'source-device',
+          sourceInterfaceId: 'iface-a',
+          targetDeviceId: 'target-device',
+          targetInterfaceId: 'iface-b',
+          isUp: true,
+          bandwidth: 10, // Mbps
+          latency: 50,   // ms
+          packetLoss: 0,
+        };
+
+        const fastConn: Connection = { ...slowConn, id: 'fast', bandwidth: 1000, latency: 20 };
+
+        const slowResult = processLinkTick(packet, [slowConn], 1);
+        const fastResult = processLinkTick(packet, [fastConn], 1);
+
+        expect(fastResult.progress).toBeGreaterThan(slowResult.progress);
+      });
+
+      it('should drop packet when packetLoss triggers', () => {
+        const packet = createMockPacket({
+          processingStage: 'on-link',
+          targetDeviceId: 'target-device',
+          currentDeviceId: 'source-device',
           progress: 0,
         });
 
-        const result1x = processLinkTick(packet, [], 1);
-        const result2x = processLinkTick(packet, [], 2);
+        const conn: Connection = {
+          id: 'lossy',
+          sourceDeviceId: 'source-device',
+          sourceInterfaceId: 'iface-a',
+          targetDeviceId: 'target-device',
+          targetInterfaceId: 'iface-b',
+          isUp: true,
+          bandwidth: 100,
+          latency: 1,
+          packetLoss: 100,
+        };
 
-        expect(result2x.progress).toBeGreaterThan(result1x.progress);
+        const randSpy = vi.spyOn(Math, 'random').mockReturnValue(0.0);
+        const result = processLinkTick(packet, [conn], 1);
+        randSpy.mockRestore();
+
+        expect(result.processingStage).toBe('dropped');
       });
 
       it('should not process packets not on link', () => {
