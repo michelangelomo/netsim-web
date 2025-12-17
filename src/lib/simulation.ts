@@ -624,7 +624,10 @@ function processSviPacket(
             }
 
             if (replyInterface?.connectedTo) {
-                const conn = connections.find(c => c.sourceInterfaceId === replyInterface!.id || c.targetInterfaceId === replyInterface!.id);
+                const conn = connections.find(c =>
+                    (c.sourceDeviceId === device.id && c.sourceInterfaceId === replyInterface!.id) ||
+                    (c.targetDeviceId === device.id && c.targetInterfaceId === replyInterface!.id)
+                );
                 if (conn) {
                     const targetDeviceId = conn.sourceDeviceId === device.id ? conn.targetDeviceId : conn.sourceDeviceId;
                     arpReply.targetDeviceId = targetDeviceId;
@@ -707,7 +710,8 @@ function processSviPacket(
 
             // Find the connection for this port
             const arpConn = connections.find(c =>
-                c.sourceInterfaceId === arpEgressPort.id || c.targetInterfaceId === arpEgressPort.id
+                (c.sourceDeviceId === device.id && c.sourceInterfaceId === arpEgressPort.id) ||
+                (c.targetDeviceId === device.id && c.targetInterfaceId === arpEgressPort.id)
             );
             if (!arpConn) return [];
 
@@ -790,7 +794,10 @@ function processSviPacket(
 
         if (!egressIface?.connectedTo) return [];
 
-        const egressConn = connections.find(c => c.sourceInterfaceId === egressIface.id || c.targetInterfaceId === egressIface.id);
+        const egressConn = connections.find(c =>
+            (c.sourceDeviceId === device.id && c.sourceInterfaceId === egressIface.id) ||
+            (c.targetDeviceId === device.id && c.targetInterfaceId === egressIface.id)
+        );
         if (!egressConn) return [];
 
         const targetDeviceId = egressConn.sourceDeviceId === device.id ? egressConn.targetDeviceId : egressConn.sourceDeviceId;
@@ -973,8 +980,8 @@ function processSwitchLogic(
 
         const connection = connections.find(
             (c) =>
-                (c.sourceInterfaceId === iface.id) ||
-                (c.targetInterfaceId === iface.id)
+                (c.sourceDeviceId === device.id && c.sourceInterfaceId === iface.id) ||
+                (c.targetDeviceId === device.id && c.targetInterfaceId === iface.id)
         );
 
         if (connection) {
@@ -1027,7 +1034,10 @@ function processHubLogic(
 
     const resultPackets: Packet[] = [];
     for (const iface of egressIfaces) {
-        const connection = connections.find((c) => c.sourceInterfaceId === iface.id || c.targetInterfaceId === iface.id);
+        const connection = connections.find((c) =>
+            (c.sourceDeviceId === device.id && c.sourceInterfaceId === iface.id) ||
+            (c.targetDeviceId === device.id && c.targetInterfaceId === iface.id)
+        );
         if (!connection) continue;
 
         const targetDeviceId = connection.sourceDeviceId === device.id
@@ -1150,7 +1160,9 @@ function processL3Logic(
                 };
                 // Prefer sending it immediately on the link (when we have connection info)
                 const outConn = connections.find(
-                    (c) => c.sourceInterfaceId === targetInterface.id || c.targetInterfaceId === targetInterface.id
+                    (c) =>
+                        (c.sourceDeviceId === device.id && c.sourceInterfaceId === targetInterface.id) ||
+                        (c.targetDeviceId === device.id && c.targetInterfaceId === targetInterface.id)
                 );
                 if (outConn) {
                     replyPacket.targetDeviceId = outConn.sourceDeviceId === device.id
@@ -1300,7 +1312,9 @@ function processL3Logic(
                 };
 
                 const outConn = connections.find(
-                    (c) => c.sourceInterfaceId === ingressInterface.id || c.targetInterfaceId === ingressInterface.id
+                    (c) =>
+                        (c.sourceDeviceId === device.id && c.sourceInterfaceId === ingressInterface.id) ||
+                        (c.targetDeviceId === device.id && c.targetInterfaceId === ingressInterface.id)
                 );
 
                 if (arpEntry && outConn) {
@@ -1382,7 +1396,9 @@ function processL3Logic(
                     };
 
                     const outConn = connections.find(
-                        (c) => c.sourceInterfaceId === ingressInterface.id || c.targetInterfaceId === ingressInterface.id
+                        (c) =>
+                            (c.sourceDeviceId === device.id && c.sourceInterfaceId === ingressInterface.id) ||
+                            (c.targetDeviceId === device.id && c.targetInterfaceId === ingressInterface.id)
                     );
 
                     if (outConn) {
@@ -1425,7 +1441,9 @@ function processL3Logic(
 
             // Find connection on egress interface
             const connection = connections.find(
-                (c) => c.sourceInterfaceId === egressInterface.id || c.targetInterfaceId === egressInterface.id
+                (c) =>
+                    (c.sourceDeviceId === device.id && c.sourceInterfaceId === egressInterface.id) ||
+                    (c.targetDeviceId === device.id && c.targetInterfaceId === egressInterface.id)
             );
 
             if (connection) {
@@ -1477,7 +1495,9 @@ function processL3Logic(
             // Yes, put it on link.
 
             const connection = connections.find(
-                (c) => c.sourceInterfaceId === egressInterface.id || c.targetInterfaceId === egressInterface.id
+                (c) =>
+                    (c.sourceDeviceId === device.id && c.sourceInterfaceId === egressInterface.id) ||
+                    (c.targetDeviceId === device.id && c.targetInterfaceId === egressInterface.id)
             );
 
             if (connection) {

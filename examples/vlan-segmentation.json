@@ -147,7 +147,7 @@
                     "speed": 100,
                     "duplex": "full",
                     "vlan": 10,
-                    "switchportMode": "access",
+                    "vlanMode": "access",
                     "accessVlan": 10,
                     "connectedTo": "sales1-eth0"
                 },
@@ -162,7 +162,7 @@
                     "speed": 100,
                     "duplex": "full",
                     "vlan": 10,
-                    "switchportMode": "access",
+                    "vlanMode": "access",
                     "accessVlan": 10,
                     "connectedTo": "sales2-eth0"
                 },
@@ -177,7 +177,7 @@
                     "speed": 100,
                     "duplex": "full",
                     "vlan": 20,
-                    "switchportMode": "access",
+                    "vlanMode": "access",
                     "accessVlan": 20,
                     "connectedTo": "eng1-eth0"
                 },
@@ -192,7 +192,7 @@
                     "speed": 100,
                     "duplex": "full",
                     "vlan": 20,
-                    "switchportMode": "access",
+                    "vlanMode": "access",
                     "accessVlan": 20,
                     "connectedTo": "eng2-eth0"
                 },

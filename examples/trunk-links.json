@@ -147,7 +147,7 @@
                     "speed": 100,
                     "duplex": "full",
                     "vlan": 10,
-                    "switchportMode": "access",
+                    "vlanMode": "access",
                     "accessVlan": 10,
                     "connectedTo": "v10sw1pc-eth0"
                 },
@@ -162,7 +162,7 @@
                     "speed": 100,
                     "duplex": "full",
                     "vlan": 20,
-                    "switchportMode": "access",
+                    "vlanMode": "access",
                     "accessVlan": 20,
                     "connectedTo": "v20sw1pc-eth0"
                 },
@@ -177,9 +177,9 @@
                     "speed": 1000,
                     "duplex": "full",
                     "vlan": 1,
-                    "switchportMode": "trunk",
-                    "trunkNativeVlan": 1,
-                    "trunkAllowedVlans": [
+                    "vlanMode": "trunk",
+                    "nativeVlan": 1,
+                    "allowedVlans": [
                         1,
                         10,
                         20,
@@ -293,7 +293,7 @@
                     "speed": 100,
                     "duplex": "full",
                     "vlan": 10,
-                    "switchportMode": "access",
+                    "vlanMode": "access",
                     "accessVlan": 10,
                     "connectedTo": "v10sw2pc-eth0"
                 },
@@ -308,7 +308,7 @@
                     "speed": 100,
                     "duplex": "full",
                     "vlan": 20,
-                    "switchportMode": "access",
+                    "vlanMode": "access",
                     "accessVlan": 20,
                     "connectedTo": "v20sw2pc-eth0"
                 },
@@ -323,9 +323,9 @@
                     "speed": 1000,
                     "duplex": "full",
                     "vlan": 1,
-                    "switchportMode": "trunk",
-                    "trunkNativeVlan": 1,
-                    "trunkAllowedVlans": [
+                    "vlanMode": "trunk",
+                    "nativeVlan": 1,
+                    "allowedVlans": [
                         1,
                         10,
                         20,

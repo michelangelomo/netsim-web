@@ -142,10 +142,14 @@ function getReachableL2InterfaceIdsFromInterface(
   devices: NetworkDevice[],
   connections: Connection[]
 ): Set<string> {
+  const ifaceKey = (deviceId: string, interfaceId: string) => `${deviceId}:${interfaceId}`;
   const reachable = new Set<string>();
 
   const connection = connections.find(
-    (c) => c.isUp && (c.sourceInterfaceId === startInterfaceId || c.targetInterfaceId === startInterfaceId)
+    (c) =>
+      c.isUp &&
+      ((c.sourceDeviceId === startDeviceId && c.sourceInterfaceId === startInterfaceId) ||
+        (c.targetDeviceId === startDeviceId && c.targetInterfaceId === startInterfaceId))
   );
   if (!connection) return reachable;
 
@@ -160,8 +164,9 @@ function getReachableL2InterfaceIdsFromInterface(
 
   while (queue.length > 0) {
     const { deviceId, ingressInterfaceId } = queue.shift()!;
-    if (reachable.has(ingressInterfaceId)) continue;
-    reachable.add(ingressInterfaceId);
+    const key = ifaceKey(deviceId, ingressInterfaceId);
+    if (reachable.has(key)) continue;
+    reachable.add(key);
 
     const device = devices.find((d) => d.id === deviceId);
     if (!device) continue;
@@ -175,7 +180,10 @@ function getReachableL2InterfaceIdsFromInterface(
       if (iface.id === ingressInterfaceId) continue;
 
       const conn = connections.find(
-        (c) => c.isUp && (c.sourceInterfaceId === iface.id || c.targetInterfaceId === iface.id)
+        (c) =>
+          c.isUp &&
+          ((c.sourceDeviceId === device.id && c.sourceInterfaceId === iface.id) ||
+            (c.targetDeviceId === device.id && c.targetInterfaceId === iface.id))
       );
       if (!conn) continue;
 
@@ -1358,7 +1366,7 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
       get().devices,
       get().connections
     );
-    if (!reachableInterfaceIds.has(targetInterface.id)) return null;
+    if (!reachableInterfaceIds.has(`${targetDevice.id}:${targetInterface.id}`)) return null;
 
     const entry: ArpEntry = {
       ipAddress: targetIP,
@@ -1824,8 +1832,9 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
           // Find the connection and neighbor
           const conn = connections.find(
             (c) =>
-              (c.sourceInterfaceId === iface.id || c.targetInterfaceId === iface.id) &&
-              c.isUp
+              c.isUp &&
+              ((c.sourceDeviceId === currentDevice.id && c.sourceInterfaceId === iface.id) ||
+                (c.targetDeviceId === currentDevice.id && c.targetInterfaceId === iface.id))
           );
           if (!conn) continue;
 
@@ -1909,9 +1918,9 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
         // Find neighbor to determine if we should be designated or alternate
         const conn = connections.find(
           (c) =>
-            (c.sourceInterfaceId === port.interfaceId ||
-              c.targetInterfaceId === port.interfaceId) &&
-            c.isUp
+            c.isUp &&
+            ((c.sourceDeviceId === currentDevice.id && c.sourceInterfaceId === port.interfaceId) ||
+              (c.targetDeviceId === currentDevice.id && c.targetInterfaceId === port.interfaceId))
         );
 
         if (conn) {
@@ -2289,7 +2298,7 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
     for (const candidate of get().devices) {
       if (candidate.id === deviceId) continue;
       const servers = getDhcpServers(candidate);
-      const match = servers.find((s) => s.enabled && reachableInterfaceIds.has(s.interfaceId));
+      const match = servers.find((s) => s.enabled && reachableInterfaceIds.has(`${candidate.id}:${s.interfaceId}`));
       if (match) {
         return { device: candidate, config: match };
       }
@@ -2313,7 +2322,9 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
     // Find DHCP server reachable from this specific interface
     // We need to search starting from the connected device via this interface
     const connection = get().connections.find(
-      (c) => c.sourceInterfaceId === interfaceId || c.targetInterfaceId === interfaceId
+      (c) =>
+        (c.sourceDeviceId === deviceId && c.sourceInterfaceId === interfaceId) ||
+        (c.targetDeviceId === deviceId && c.targetInterfaceId === interfaceId)
     );
 
     if (!connection) {
@@ -2857,6 +2868,9 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
       selectedDeviceId: null,
       selectedConnectionId: null,
     });
+
+    // Re-run STP convergence so preloaded topologies pick consistent roles/states
+    get().runStpConvergence();
   },
 
   exportProject: () => {

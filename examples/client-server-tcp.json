@@ -378,7 +378,8 @@
       "targetInterfaceId": "sw-cli-fa0",
       "isUp": true,
       "bandwidth": 100,
-      "latency": 1
+      "latency": 1,
+      "packetLoss": 0
     },
     {
       "id": "conn-sw-cli-rtr",
@@ -388,7 +389,8 @@
       "targetInterfaceId": "rtr-g0",
       "isUp": true,
       "bandwidth": 1000,
-      "latency": 1
+      "latency": 1,
+      "packetLoss": 0
     },
     {
       "id": "conn-rtr-sw-srv",
@@ -398,7 +400,8 @@
       "targetInterfaceId": "sw-srv-fa1",
       "isUp": true,
       "bandwidth": 1000,
-      "latency": 1
+      "latency": 1,
+      "packetLoss": 0
     },
     {
       "id": "conn-sw-srv-app",
@@ -408,7 +411,8 @@
       "targetInterfaceId": "app-eth0",
       "isUp": true,
       "bandwidth": 100,
-      "latency": 1
+      "latency": 1,
+      "packetLoss": 0
     }
   ]
 }

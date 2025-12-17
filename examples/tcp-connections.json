@@ -259,7 +259,8 @@
             "targetInterfaceId": "sw1-fa0",
             "isUp": true,
             "bandwidth": 100,
-            "latency": 1
+            "latency": 1,
+            "packetLoss": 0
         },
         {
             "id": "conn-pc1-sw",
@@ -269,7 +270,8 @@
             "targetInterfaceId": "sw1-fa1",
             "isUp": true,
             "bandwidth": 100,
-            "latency": 1
+            "latency": 1,
+            "packetLoss": 0
         },
         {
             "id": "conn-pc2-sw",
@@ -279,7 +281,8 @@
             "targetInterfaceId": "sw1-fa2",
             "isUp": true,
             "bandwidth": 100,
-            "latency": 1
+            "latency": 1,
+            "packetLoss": 0
         },
         {
             "id": "conn-pc3-sw",
@@ -289,7 +292,8 @@
             "targetInterfaceId": "sw1-fa3",
             "isUp": true,
             "bandwidth": 100,
-            "latency": 1
+            "latency": 1,
+            "packetLoss": 0
         }
     ],
     "simulation": {

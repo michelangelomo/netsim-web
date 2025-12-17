@@ -33,7 +33,11 @@
                     "speed": 1000,
                     "duplex": "full",
                     "vlan": 1,
-                    "switchportMode": "trunk",
+                    "vlanMode": "trunk",
+                    "nativeVlan": 1,
+                    "allowedVlans": [
+                        1
+                    ],
                     "connectedTo": "sw2-gi0/0"
                 },
                 {
@@ -47,16 +51,61 @@
                     "speed": 1000,
                     "duplex": "full",
                     "vlan": 1,
-                    "switchportMode": "trunk",
+                    "vlanMode": "trunk",
+                    "nativeVlan": 1,
+                    "allowedVlans": [
+                        1
+                    ],
                     "connectedTo": "sw3-gi0/0"
                 }
             ],
             "stpConfig": {
                 "enabled": true,
-                "priority": 4096,
-                "helloTime": 2,
+                "bridgePriority": 4096,
+                "bridgeId": "1000.aa:00:01:00:00:00",
+                "rootBridgeId": "1000.aa:00:01:00:00:00",
+                "rootPathCost": 0,
+                "rootPort": null,
                 "maxAge": 20,
-                "forwardDelay": 15
+                "helloTime": 2,
+                "forwardDelay": 15,
+                "topologyChangeCount": 0,
+                "ports": [
+                    {
+                        "interfaceId": "gi0/0",
+                        "interfaceName": "GigabitEthernet0/0",
+                        "state": "forwarding",
+                        "role": "designated",
+                        "pathCost": 4,
+                        "portPriority": 128,
+                        "portId": 32769,
+                        "designatedRoot": "1000.aa:00:01:00:00:00",
+                        "designatedCost": 0,
+                        "designatedBridge": "1000.aa:00:01:00:00:00",
+                        "designatedPort": 0,
+                        "forwardDelay": 15,
+                        "messageAge": 0,
+                        "maxAge": 20,
+                        "helloTime": 2
+                    },
+                    {
+                        "interfaceId": "gi0/1",
+                        "interfaceName": "GigabitEthernet0/1",
+                        "state": "forwarding",
+                        "role": "designated",
+                        "pathCost": 4,
+                        "portPriority": 128,
+                        "portId": 32770,
+                        "designatedRoot": "1000.aa:00:01:00:00:00",
+                        "designatedCost": 0,
+                        "designatedBridge": "1000.aa:00:01:00:00:00",
+                        "designatedPort": 0,
+                        "forwardDelay": 15,
+                        "messageAge": 0,
+                        "maxAge": 20,
+                        "helloTime": 2
+                    }
+                ]
             },
             "dhcpServers": []
         },
@@ -91,7 +140,11 @@
                     "speed": 1000,
                     "duplex": "full",
                     "vlan": 1,
-                    "switchportMode": "trunk",
+                    "vlanMode": "trunk",
+                    "nativeVlan": 1,
+                    "allowedVlans": [
+                        1
+                    ],
                     "connectedTo": "sw1-gi0/0"
                 },
                 {
@@ -105,7 +158,11 @@
                     "speed": 1000,
                     "duplex": "full",
                     "vlan": 1,
-                    "switchportMode": "trunk",
+                    "vlanMode": "trunk",
+                    "nativeVlan": 1,
+                    "allowedVlans": [
+                        1
+                    ],
                     "connectedTo": "sw3-gi0/1"
                 },
                 {
@@ -119,17 +176,75 @@
                     "speed": 1000,
                     "duplex": "full",
                     "vlan": 1,
-                    "switchportMode": "access",
+                    "vlanMode": "access",
                     "accessVlan": 1,
                     "connectedTo": "pc1-eth0"
                 }
             ],
             "stpConfig": {
                 "enabled": true,
-                "priority": 32768,
-                "helloTime": 2,
+                "bridgePriority": 32768,
+                "bridgeId": "8000.aa:00:02:00:00:00",
+                "rootBridgeId": "8000.aa:00:02:00:00:00",
+                "rootPathCost": 0,
+                "rootPort": null,
                 "maxAge": 20,
-                "forwardDelay": 15
+                "helloTime": 2,
+                "forwardDelay": 15,
+                "topologyChangeCount": 0,
+                "ports": [
+                    {
+                        "interfaceId": "gi0/0",
+                        "interfaceName": "GigabitEthernet0/0",
+                        "state": "forwarding",
+                        "role": "designated",
+                        "pathCost": 4,
+                        "portPriority": 128,
+                        "portId": 32769,
+                        "designatedRoot": "8000.aa:00:02:00:00:00",
+                        "designatedCost": 0,
+                        "designatedBridge": "8000.aa:00:02:00:00:00",
+                        "designatedPort": 0,
+                        "forwardDelay": 15,
+                        "messageAge": 0,
+                        "maxAge": 20,
+                        "helloTime": 2
+                    },
+                    {
+                        "interfaceId": "gi0/1",
+                        "interfaceName": "GigabitEthernet0/1",
+                        "state": "forwarding",
+                        "role": "designated",
+                        "pathCost": 4,
+                        "portPriority": 128,
+                        "portId": 32770,
+                        "designatedRoot": "8000.aa:00:02:00:00:00",
+                        "designatedCost": 0,
+                        "designatedBridge": "8000.aa:00:02:00:00:00",
+                        "designatedPort": 0,
+                        "forwardDelay": 15,
+                        "messageAge": 0,
+                        "maxAge": 20,
+                        "helloTime": 2
+                    },
+                    {
+                        "interfaceId": "gi0/2",
+                        "interfaceName": "GigabitEthernet0/2",
+                        "state": "forwarding",
+                        "role": "designated",
+                        "pathCost": 4,
+                        "portPriority": 128,
+                        "portId": 32771,
+                        "designatedRoot": "8000.aa:00:02:00:00:00",
+                        "designatedCost": 0,
+                        "designatedBridge": "8000.aa:00:02:00:00:00",
+                        "designatedPort": 0,
+                        "forwardDelay": 15,
+                        "messageAge": 0,
+                        "maxAge": 20,
+                        "helloTime": 2
+                    }
+                ]
             },
             "dhcpServers": []
         },
@@ -164,7 +279,11 @@
                     "speed": 1000,
                     "duplex": "full",
                     "vlan": 1,
-                    "switchportMode": "trunk",
+                    "vlanMode": "trunk",
+                    "nativeVlan": 1,
+                    "allowedVlans": [
+                        1
+                    ],
                     "connectedTo": "sw1-gi0/1"
                 },
                 {
@@ -178,7 +297,11 @@
                     "speed": 1000,
                     "duplex": "full",
                     "vlan": 1,
-                    "switchportMode": "trunk",
+                    "vlanMode": "trunk",
+                    "nativeVlan": 1,
+                    "allowedVlans": [
+                        1
+                    ],
                     "connectedTo": "sw2-gi0/1"
                 },
                 {
@@ -192,17 +315,75 @@
                     "speed": 1000,
                     "duplex": "full",
                     "vlan": 1,
-                    "switchportMode": "access",
+                    "vlanMode": "access",
                     "accessVlan": 1,
                     "connectedTo": "pc2-eth0"
                 }
             ],
             "stpConfig": {
                 "enabled": true,
-                "priority": 32768,
-                "helloTime": 2,
+                "bridgePriority": 32768,
+                "bridgeId": "8000.aa:00:03:00:00:00",
+                "rootBridgeId": "8000.aa:00:03:00:00:00",
+                "rootPathCost": 0,
+                "rootPort": null,
                 "maxAge": 20,
-                "forwardDelay": 15
+                "helloTime": 2,
+                "forwardDelay": 15,
+                "topologyChangeCount": 0,
+                "ports": [
+                    {
+                        "interfaceId": "gi0/0",
+                        "interfaceName": "GigabitEthernet0/0",
+                        "state": "forwarding",
+                        "role": "designated",
+                        "pathCost": 4,
+                        "portPriority": 128,
+                        "portId": 32769,
+                        "designatedRoot": "8000.aa:00:03:00:00:00",
+                        "designatedCost": 0,
+                        "designatedBridge": "8000.aa:00:03:00:00:00",
+                        "designatedPort": 0,
+                        "forwardDelay": 15,
+                        "messageAge": 0,
+                        "maxAge": 20,
+                        "helloTime": 2
+                    },
+                    {
+                        "interfaceId": "gi0/1",
+                        "interfaceName": "GigabitEthernet0/1",
+                        "state": "forwarding",
+                        "role": "designated",
+                        "pathCost": 4,
+                        "portPriority": 128,
+                        "portId": 32770,
+                        "designatedRoot": "8000.aa:00:03:00:00:00",
+                        "designatedCost": 0,
+                        "designatedBridge": "8000.aa:00:03:00:00:00",
+                        "designatedPort": 0,
+                        "forwardDelay": 15,
+                        "messageAge": 0,
+                        "maxAge": 20,
+                        "helloTime": 2
+                    },
+                    {
+                        "interfaceId": "gi0/2",
+                        "interfaceName": "GigabitEthernet0/2",
+                        "state": "forwarding",
+                        "role": "designated",
+                        "pathCost": 4,
+                        "portPriority": 128,
+                        "portId": 32771,
+                        "designatedRoot": "8000.aa:00:03:00:00:00",
+                        "designatedCost": 0,
+                        "designatedBridge": "8000.aa:00:03:00:00:00",
+                        "designatedPort": 0,
+                        "forwardDelay": 15,
+                        "messageAge": 0,
+                        "maxAge": 20,
+                        "helloTime": 2
+                    }
+                ]
             },
             "dhcpServers": []
         },
