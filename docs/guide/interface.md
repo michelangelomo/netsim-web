@@ -18,6 +18,7 @@ The central canvas is your workspace where you:
 - Place and arrange network devices
 - Create connections between devices
 - View packet animations during simulation
+- Use the top-right controls to zoom, fit view, or **auto-arrange** devices (Grid icon) into a readable layout
 
 ### Properties Panel
 

@@ -186,6 +186,36 @@ function NetworkCanvasInner() {
   const [localNodes, setLocalNodes, onNodesChange] = useNodesState(nodes);
   const [localEdges, setLocalEdges, onEdgesChange] = useEdgesState(edges);
 
+  const autoLayout = useCallback(() => {
+    if (!devices.length) return;
+
+    const spacing = 320; // extra breathing room between nodes/links
+    const cols = Math.max(1, Math.ceil(Math.sqrt(devices.length)));
+    const rows = Math.ceil(devices.length / cols);
+    const xOffset = -((cols - 1) * spacing) / 2;
+    const yOffset = -((rows - 1) * spacing) / 2;
+
+    const nextPositions: Record<string, { x: number; y: number }> = {};
+    devices.forEach((device, idx) => {
+      const col = idx % cols;
+      const row = Math.floor(idx / cols);
+      nextPositions[device.id] = {
+        x: xOffset + col * spacing,
+        y: yOffset + row * spacing,
+      };
+    });
+
+    Object.entries(nextPositions).forEach(([id, pos]) => updateDevicePosition(id, pos));
+
+    setLocalNodes((prev) =>
+      prev.map((n) => (nextPositions[n.id] ? { ...n, position: nextPositions[n.id] } : n))
+    );
+
+    requestAnimationFrame(() => {
+      fitView({ padding: 0.2, duration: 400 });
+    });
+  }, [devices, fitView, setLocalNodes, updateDevicePosition]);
+
   // Sync nodes when devices change
   useEffect(() => {
     setLocalNodes(nodes);
@@ -402,6 +432,11 @@ function NetworkCanvasInner() {
               icon={Maximize2}
               onClick={() => fitView({ padding: 0.2 })}
               tooltip="Fit View (F)"
+            />
+            <ToolButton
+              icon={Grid3X3}
+              onClick={autoLayout}
+              tooltip="Auto-arrange devices"
             />
           </div>
         </Panel>

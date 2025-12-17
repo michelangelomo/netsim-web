@@ -13,6 +13,8 @@ import {
   BookOpen,
   Keyboard,
   ChevronDown,
+  Link2,
+  StepForward,
 } from 'lucide-react';
 import { useNetworkStore } from '@/store/network-store';
 
@@ -21,6 +23,9 @@ export function Header() {
     simulation,
     startSimulation,
     stopSimulation,
+    stepSimulation,
+    setSimulationPreset,
+    setDeterministicLoss,
     clearProject,
     exportProject,
     loadProject,
@@ -34,6 +39,37 @@ export function Header() {
 
   const [showHelp, setShowHelp] = useState(false);
   const [showTutorialMenu, setShowTutorialMenu] = useState(false);
+  const [showExamplesMenu, setShowExamplesMenu] = useState(false);
+  const [isLoadingRemote, setIsLoadingRemote] = useState(false);
+
+  const exampleLinks = [
+    { label: 'Simple Net', url: 'https://raw.githubusercontent.com/michelangelomo/netsim-web/main/examples/simple-net.json' },
+    { label: 'STP Triangle', url: 'https://raw.githubusercontent.com/michelangelomo/netsim-web/main/examples/stp-triangle.json' },
+    { label: 'Inter-VLAN Routing', url: 'https://raw.githubusercontent.com/michelangelomo/netsim-web/main/examples/inter-vlan-routing.json' },
+    { label: 'Client-Server TCP', url: 'https://raw.githubusercontent.com/michelangelomo/netsim-web/main/examples/client-server-tcp.json' },
+    { label: 'Trunk Links', url: 'https://raw.githubusercontent.com/michelangelomo/netsim-web/main/examples/trunk-links.json' },
+  ];
+
+  const loadProjectFromData = useCallback(
+    (data: any, sourceLabel: string) => {
+      if (!data?.devices || !data?.connections) {
+        addNotification({
+          type: 'error',
+          title: 'Load Failed',
+          message: 'Invalid project file',
+        });
+        return;
+      }
+
+      loadProject(data);
+      addNotification({
+        type: 'success',
+        title: 'Project Loaded',
+        message: `Loaded ${data.devices.length || 0} devices from ${sourceLabel}`,
+      });
+    },
+    [loadProject, addNotification]
+  );
 
   const handleNew = useCallback(() => {
     if (confirm('Create a new project? All unsaved changes will be lost.')) {
@@ -76,12 +112,7 @@ export function Header() {
       reader.onload = (event) => {
         try {
           const data = JSON.parse(event.target?.result as string);
-          loadProject(data);
-          addNotification({
-            type: 'success',
-            title: 'Project Loaded',
-            message: `Loaded ${data.devices?.length || 0} devices`,
-          });
+          loadProjectFromData(data, 'file');
         } catch (err) {
           addNotification({
             type: 'error',
@@ -93,60 +124,152 @@ export function Header() {
       reader.readAsText(file);
     };
     input.click();
-  }, [loadProject, addNotification]);
+  }, [loadProjectFromData, addNotification]);
+
+  const handleLoadFromUrl = useCallback(
+    async (inputUrl?: string) => {
+      const url = inputUrl ?? prompt('Enter project JSON URL');
+      if (!url) return;
+
+      setIsLoadingRemote(true);
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        loadProjectFromData(data, 'URL');
+      } catch (err) {
+        addNotification({
+          type: 'error',
+          title: 'Load Failed',
+          message: 'Could not load project from URL',
+        });
+      } finally {
+        setIsLoadingRemote(false);
+        setShowExamplesMenu(false);
+      }
+    },
+    [loadProjectFromData, addNotification]
+  );
 
   return (
     <>
       <header className="h-14 bg-dark-900 border-b border-dark-700 flex items-center justify-between px-4">
         {/* Left - File actions */}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2">
           <HeaderButton icon={FilePlus} tooltip="New Project" onClick={handleNew} />
           <HeaderButton icon={Save} tooltip="Save Project" onClick={handleSave} />
           <HeaderButton icon={FolderOpen} tooltip="Load Project" onClick={handleLoad} />
+          <HeaderButton icon={Link2} tooltip="Load from URL" onClick={() => handleLoadFromUrl()} />
+
+          <div className="relative">
+            <button
+              onClick={() => setShowExamplesMenu((v) => !v)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-colors ${isLoadingRemote ? 'border-dark-700 text-dark-500 cursor-not-allowed' : 'border-dark-700 text-dark-200 hover:text-white hover:border-dark-500'}`}
+              disabled={isLoadingRemote}
+            >
+              <Download className="w-4 h-4" />
+              <span className="hidden sm:inline">Examples</span>
+              <ChevronDown className="w-4 h-4" />
+            </button>
+            {showExamplesMenu && (
+              <div className="absolute left-0 mt-2 w-64 bg-dark-900 border border-dark-700 rounded-lg shadow-2xl z-50 overflow-hidden">
+                <div className="py-2">
+                  <div className="px-3 pb-2 text-[11px] uppercase tracking-wide text-dark-500">GitHub examples</div>
+                  {exampleLinks.map((item) => (
+                    <button
+                      key={item.url}
+                      onClick={() => handleLoadFromUrl(item.url)}
+                      disabled={isLoadingRemote}
+                      className={`w-full text-left px-3 py-2 text-sm flex items-center gap-2 ${isLoadingRemote ? 'text-dark-500 cursor-not-allowed' : 'text-dark-100 hover:bg-dark-800'}`}
+                    >
+                      <Download className="w-4 h-4 text-dark-400" />
+                      <span>{item.label}</span>
+                    </button>
+                  ))}
+                  <div className="border-t border-dark-800 mt-1 pt-1">
+                    <button
+                      onClick={() => handleLoadFromUrl()}
+                      disabled={isLoadingRemote}
+                      className={`w-full text-left px-3 py-2 text-sm flex items-center gap-2 ${isLoadingRemote ? 'text-dark-500 cursor-not-allowed' : 'text-dark-200 hover:bg-dark-800'}`}
+                    >
+                      <Upload className="w-4 h-4" />
+                      <span>{isLoadingRemote ? 'Loading…' : 'Load custom URL'}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
 
           <div className="w-px h-6 bg-dark-700 mx-2" />
 
           {/* Simulation controls */}
-          {!simulation.isRunning ? (
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={startSimulation}
-              className="flex items-center gap-2 px-4 py-1.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white text-sm font-medium rounded-lg shadow-lg shadow-emerald-500/20 transition-all"
-            >
-              <Play className="w-4 h-4" />
-              Simulate
-            </motion.button>
-          ) : (
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={stopSimulation}
-              className="flex items-center gap-2 px-4 py-1.5 bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-400 hover:to-rose-500 text-white text-sm font-medium rounded-lg shadow-lg shadow-rose-500/20 transition-all"
-            >
-              <Square className="w-4 h-4" />
-              Stop
-            </motion.button>
-          )}
-        </div>
+          <div className="flex items-center gap-2">
+            {!simulation.isRunning ? (
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={startSimulation}
+                className="flex items-center gap-2 h-10 px-4 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white text-sm font-medium rounded-lg shadow-lg shadow-emerald-500/20 transition-all"
+              >
+                <Play className="w-4 h-4" />
+                Start
+              </motion.button>
+            ) : (
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={stopSimulation}
+                className="flex items-center gap-2 h-10 px-4 bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-400 hover:to-rose-500 text-white text-sm font-medium rounded-lg shadow-lg shadow-rose-500/20 transition-all"
+              >
+                <Square className="w-4 h-4" />
+                Stop
+              </motion.button>
+            )}
 
-        {/* Center - Status */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-dark-800 rounded-lg">
-            <div
-              className={`w-2 h-2 rounded-full ${simulation.isRunning
-                  ? 'bg-emerald-500 animate-pulse'
-                  : 'bg-dark-500'
+            <button
+              onClick={stepSimulation}
+              className="h-10 px-3 rounded-lg border border-dark-700 bg-dark-800/60 text-dark-100 hover:border-cyan-500/50 hover:text-cyan-200 flex items-center gap-2 transition-colors"
+              title="Step"
+            >
+              <StepForward className="w-4 h-4" />
+              Step
+            </button>
+
+            <div className="hidden md:flex items-center gap-1 bg-dark-800/60 border border-dark-700 rounded-lg px-1 py-1">
+              {(['slow', 'normal', 'fast'] as const).map((preset) => {
+                const isActive = simulation.speed === (preset === 'slow' ? 0.5 : preset === 'normal' ? 1 : 2);
+                return (
+                  <button
+                    key={preset}
+                    onClick={() => setSimulationPreset(preset)}
+                    className={`h-8 px-2 rounded-md text-xs capitalize transition-colors ${isActive
+                      ? 'bg-blue-600/20 text-blue-200 border border-blue-500/50'
+                      : 'text-dark-300 border border-transparent hover:border-blue-500/30 hover:text-blue-100'
+                      }`}
+                    aria-pressed={isActive}
+                  >
+                    {preset}
+                  </button>
+                );
+              })}
+            </div>
+
+            <button
+              onClick={() => setDeterministicLoss(!(simulation.deterministicLoss ?? false))}
+              className={`hidden lg:inline-flex items-center gap-2 h-10 px-3 rounded-lg border text-xs transition-colors relative group ${simulation.deterministicLoss
+                ? 'border-amber-400/60 text-amber-200 bg-amber-500/10'
+                : 'border-dark-700 text-dark-300 hover:border-dark-500 hover:text-dark-100'
                 }`}
-              style={{
-                boxShadow: simulation.isRunning
-                  ? '0 0 10px rgba(16, 185, 129, 0.5)'
-                  : 'none',
-              }}
-            />
-            <span className={`text-sm ${simulation.isRunning ? 'text-emerald-400' : 'text-dark-400'}`}>
-              {simulation.isRunning ? 'Simulation Running' : 'Ready'}
-            </span>
+              title="Deterministic packet loss"
+              aria-label="Toggle deterministic packet loss for reproducible drops"
+            >
+              <span className={`w-2 h-2 rounded-full ${simulation.deterministicLoss ? 'bg-amber-400' : 'bg-dark-500'}`} />
+              Deterministic loss
+              <span className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 whitespace-nowrap px-2 py-1 rounded bg-dark-800 border border-dark-700 text-[11px] text-dark-100 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-50">
+                Ensures repeatable packet loss during simulation
+              </span>
+            </button>
           </div>
         </div>
 
