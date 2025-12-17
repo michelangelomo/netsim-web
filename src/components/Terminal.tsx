@@ -364,50 +364,56 @@ export function Terminal() {
         >
           {/* Terminal Header with Tabs */}
           <div className="flex flex-col border-b border-dark-700 bg-dark-800/50">
-            {/* Tabs Row */}
-            <div className="flex items-center h-10 px-2 gap-1 overflow-x-auto scrollbar-thin">
-              {terminalTabs.map((tab, index) => {
-                const tabDevice = devices.find(d => d.id === tab.deviceId);
-                const isActive = index === activeTerminalTabIndex;
-                return (
-                  <div
-                    key={tab.id}
-                    className={`
-                      flex items-center gap-2 px-3 py-1.5 rounded-t text-sm cursor-pointer
-                      transition-colors min-w-[100px] max-w-[180px] group
-                      ${isActive
-                        ? 'bg-dark-900 text-white border-t border-l border-r border-dark-600'
-                        : 'bg-dark-700/50 text-dark-300 hover:bg-dark-700 hover:text-white'}
-                    `}
-                    onClick={() => setActiveTerminalTab(index)}
-                    title={`${tabDevice?.name || 'Terminal'} (Alt+${index + 1})`}
-                  >
-                    <TerminalIcon className={`w-3 h-3 flex-shrink-0 ${isActive ? 'text-emerald-500' : 'text-dark-400'}`} />
-                    <span className="truncate flex-1">{tab.name}</span>
-                    {terminalTabs.length > 1 && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeTerminalTab(tab.id);
-                        }}
-                        className="p-0.5 opacity-0 group-hover:opacity-100 hover:bg-dark-600 rounded transition-opacity"
-                        title="Close tab (Alt+W)"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+            {/* Tabs Row - hidden when minimized */}
+            {!isMinimized && (
+              <div className="flex items-center h-10 px-2 gap-1 overflow-x-auto scrollbar-thin">
+                {terminalTabs.map((tab, index) => {
+                  const tabDevice = devices.find(d => d.id === tab.deviceId);
+                  const isActive = index === activeTerminalTabIndex;
+                  return (
+                    <div
+                      key={tab.id}
+                      className={`
+                        flex items-center gap-2 px-3 py-1.5 rounded-t text-sm cursor-pointer
+                        transition-colors min-w-[100px] max-w-[180px] group
+                        ${isActive
+                          ? 'bg-dark-900 text-white border-t border-l border-r border-dark-600'
+                          : 'bg-dark-700/50 text-dark-300 hover:bg-dark-700 hover:text-white'}
+                      `}
+                      onClick={() => setActiveTerminalTab(index)}
+                      title={`${tabDevice?.name || 'Terminal'} (Alt+${index + 1})`}
+                    >
+                      <TerminalIcon className={`w-3 h-3 flex-shrink-0 ${isActive ? 'text-emerald-500' : 'text-dark-400'}`} />
+                      <span className="truncate flex-1">{tab.name}</span>
+                      {terminalTabs.length > 1 && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeTerminalTab(tab.id);
+                          }}
+                          className="p-0.5 opacity-0 group-hover:opacity-100 hover:bg-dark-600 rounded transition-opacity"
+                          title="Close tab (Alt+W)"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Controls Row */}
-            <div className="flex items-center justify-between px-4 h-8 bg-dark-900/50">
+            <div className="flex items-center justify-between px-4 h-10 bg-dark-900/50">
               <div className="flex items-center gap-2">
+                <TerminalIcon className="w-4 h-4 text-emerald-500" />
                 {activeDevice && (
-                  <span className="px-2 py-0.5 text-xs bg-dark-700 rounded text-dark-300">
-                    {activeDevice.type.toUpperCase()}
-                  </span>
+                  <>
+                    <span className="text-sm text-white font-medium">{activeDevice.name}</span>
+                    <span className="px-2 py-0.5 text-xs bg-dark-700 rounded text-dark-300">
+                      {activeDevice.type.toUpperCase()}
+                    </span>
+                  </>
                 )}
               </div>
 

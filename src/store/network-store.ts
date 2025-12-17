@@ -2378,19 +2378,21 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
       const existingTabIndex = terminalTabs.findIndex(tab => tab.deviceId === deviceId);
 
       if (existingTabIndex >= 0) {
-        // Switch to existing tab
+        // Switch to existing tab and expand if minimized
         set({
           activeTerminalDevice: deviceId,
           activeTerminalTabIndex: existingTabIndex,
+          terminalMinimized: false,
         });
       } else {
-        // Create a new tab for this device
+        // Create a new tab for this device and expand if minimized
         const newTab = { deviceId, id: `tab-${Date.now()}`, name: deviceName };
         const newTabs = [...terminalTabs, newTab];
         set({
           activeTerminalDevice: deviceId,
           terminalTabs: newTabs,
           activeTerminalTabIndex: newTabs.length - 1,
+          terminalMinimized: false,
         });
       }
     }
