@@ -300,7 +300,7 @@ function NetworkCanvasInner() {
     cancelConnection();
   }, [selectDevice, selectConnection, cancelConnection]);
 
-  const onEdgeMouseEnter = useCallback((_, edge: Edge) => {
+  const onEdgeMouseEnter = useCallback((_: unknown, edge: Edge) => {
     setHoveredConnectionId(edge.id);
   }, []);
 
